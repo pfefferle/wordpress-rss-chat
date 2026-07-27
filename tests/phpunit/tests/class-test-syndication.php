@@ -154,16 +154,21 @@ class Test_Syndication extends TestCase {
 	}
 
 	/**
-	 * The chat post format is registered regardless of the active theme.
+	 * The chat format is added without dropping the theme's existing formats.
 	 */
-	public function test_ensures_chat_post_format_is_available() {
+	public function test_ensures_chat_post_format_without_dropping_others() {
 		$before = \get_theme_support( 'post-formats' );
+
+		// Simulate a theme that already offers a couple of formats.
+		\remove_theme_support( 'post-formats' );
+		\add_theme_support( 'post-formats', array( 'aside', 'image' ) );
 
 		( new \RSS_Chat\Syndication() )->ensure_chat_post_format();
 
-		$support = \get_theme_support( 'post-formats' );
-		$this->assertIsArray( $support );
-		$this->assertContains( 'chat', $support[0] );
+		$formats = \get_theme_support( 'post-formats' )[0];
+		$this->assertContains( 'chat', $formats, 'chat is added' );
+		$this->assertContains( 'aside', $formats, 'existing formats are kept' );
+		$this->assertContains( 'image', $formats, 'existing formats are kept' );
 
 		// Restore prior theme support to avoid leaking global state.
 		\remove_theme_support( 'post-formats' );

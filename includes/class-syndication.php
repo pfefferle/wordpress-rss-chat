@@ -28,14 +28,19 @@ class Syndication {
 	public function init() {
 		\add_action( 'transition_post_status', array( $this, 'maybe_push_post' ), 10, 3 );
 		\add_action( 'wp_insert_comment', array( $this, 'maybe_push_comment' ), 10, 2 );
-		\add_action( 'after_setup_theme', array( $this, 'ensure_chat_post_format' ), 99 );
+		// PHP_INT_MAX so this runs after every theme/plugin has registered its
+		// own post-format support, and we merge into the final list.
+		\add_action( 'after_setup_theme', array( $this, 'ensure_chat_post_format' ), PHP_INT_MAX );
 	}
 
 	/**
 	 * Make sure the "chat" post format is available whatever the active theme
 	 * declares. Without it the format cannot be chosen in the editor, so the
-	 * plugin's per-post opt-in would be unreachable. Runs late so it merges with,
-	 * rather than replaces, the theme's own post-format support.
+	 * plugin's per-post opt-in would be unreachable.
+	 *
+	 * add_theme_support() replaces the whole post-format list rather than adding
+	 * to it, so this reads the current list and re-registers it with "chat"
+	 * appended, never dropping the formats the theme already offers.
 	 *
 	 * @return void
 	 */
