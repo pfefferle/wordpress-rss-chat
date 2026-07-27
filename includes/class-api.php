@@ -129,17 +129,17 @@ class API {
 	 * @return array|\WP_Error
 	 */
 	private function post( $path, array $query = array() ) {
-		$settings = Plugin::get_settings();
+		$account = Plugin::get_account();
 
-		if ( '' === $settings['email'] || '' === $settings['code'] ) {
+		if ( '' === $account['email'] || '' === $account['code'] ) {
 			return new \WP_Error(
 				'rss_chat_not_connected',
 				\__( 'Not connected to rss.chat. Complete the login on the settings screen first.', 'rss-chat' )
 			);
 		}
 
-		$query['emailaddress'] = $settings['email'];
-		$query['emailcode']    = $settings['code'];
+		$query['emailaddress'] = $account['email'];
+		$query['emailcode']    = $account['code'];
 
 		$url      = Plugin::server_url() . $path;
 		$url      = \add_query_arg( \array_map( 'rawurlencode', $query ), $url );

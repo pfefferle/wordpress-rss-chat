@@ -13,10 +13,15 @@ if ( ! defined( 'ABSPATH' ) ) {
 
 /**
  * Wires the plugin's pieces together and exposes shared settings helpers.
+ *
+ * Two options are kept apart on purpose: OPTION_SETTINGS is owned by the
+ * Settings API (options.php), OPTION_ACCOUNT is written only by the login flow.
+ * Storing them together would let one save wipe the other.
  */
 class Plugin {
 
-	const OPTION_KEY = 'rss_chat_settings';
+	const OPTION_SETTINGS = 'rss_chat_settings';
+	const OPTION_ACCOUNT  = 'rss_chat_account';
 
 	/**
 	 * Singleton instance.
@@ -49,35 +54,84 @@ class Plugin {
 	}
 
 	/**
-	 * Read the plugin settings, merged with defaults.
+	 * The Settings-API-managed settings, merged with defaults.
 	 *
-	 * @return array{server_url:string,email:string,code:string,screenname:string}
+	 * @return array{server_url:string}
 	 */
 	public static function get_settings() {
-		$defaults = array(
-			'server_url' => RSS_CHAT_DEFAULT_SERVER,
-			'email'      => '',
-			'code'       => '',
-			'screenname' => '',
-		);
-
-		$stored = \get_option( self::OPTION_KEY, array() );
+		$stored = \get_option( self::OPTION_SETTINGS, array() );
 		if ( ! \is_array( $stored ) ) {
 			$stored = array();
 		}
 
-		return \wp_parse_args( $stored, $defaults );
+		return \wp_parse_args( $stored, self::default_settings() );
 	}
 
 	/**
-	 * Persist the plugin settings.
+	 * Default settings.
 	 *
-	 * @param array $settings Settings to merge and store.
+	 * @return array{server_url:string}
+	 */
+	public static function default_settings() {
+		return array(
+			'server_url' => RSS_CHAT_DEFAULT_SERVER,
+		);
+	}
+
+	/**
+	 * Sanitize callback for the settings option (register_setting).
+	 *
+	 * @param mixed $input Raw posted value.
+	 * @return array{server_url:string}
+	 */
+	public static function sanitize_settings( $input ) {
+		$input = \is_array( $input ) ? $input : array();
+
+		$url = isset( $input['server_url'] ) ? \esc_url_raw( \trim( $input['server_url'] ) ) : '';
+
+		return array(
+			'server_url' => '' !== $url ? $url : RSS_CHAT_DEFAULT_SERVER,
+		);
+	}
+
+	/**
+	 * The stored rss.chat account, merged with defaults.
+	 *
+	 * @return array{email:string,code:string,screenname:string}
+	 */
+	public static function get_account() {
+		$stored = \get_option( self::OPTION_ACCOUNT, array() );
+		if ( ! \is_array( $stored ) ) {
+			$stored = array();
+		}
+
+		return \wp_parse_args(
+			$stored,
+			array(
+				'email'      => '',
+				'code'       => '',
+				'screenname' => '',
+			)
+		);
+	}
+
+	/**
+	 * Store the rss.chat account credential.
+	 *
+	 * @param array $account Account fields (email, code, screenname).
 	 * @return void
 	 */
-	public static function update_settings( array $settings ) {
-		$merged = \wp_parse_args( $settings, self::get_settings() );
-		\update_option( self::OPTION_KEY, $merged );
+	public static function update_account( array $account ) {
+		\update_option( self::OPTION_ACCOUNT, \wp_parse_args( $account, self::get_account() ) );
+	}
+
+	/**
+	 * Forget the stored credential.
+	 *
+	 * @return void
+	 */
+	public static function clear_account() {
+		\delete_option( self::OPTION_ACCOUNT );
 	}
 
 	/**
@@ -86,8 +140,8 @@ class Plugin {
 	 * @return bool
 	 */
 	public static function is_connected() {
-		$settings = self::get_settings();
-		return '' !== $settings['email'] && '' !== $settings['code'];
+		$account = self::get_account();
+		return '' !== $account['email'] && '' !== $account['code'];
 	}
 
 	/**

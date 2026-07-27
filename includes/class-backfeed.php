@@ -98,7 +98,7 @@ class Backfeed {
 			)
 		);
 
-		$own = Plugin::get_settings()['screenname'];
+		$own = Plugin::get_account()['screenname'];
 
 		foreach ( $posts as $post_id ) {
 			$rss_id = (int) \get_post_meta( $post_id, Syndication::POST_META_ID, true );
