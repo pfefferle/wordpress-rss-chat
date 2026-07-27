@@ -53,6 +53,14 @@ class Syndication {
 			? $support[0]
 			: array();
 
+		// Block themes (and some others) declare no post formats at all. Rather
+		// than leave a lonely "Chat" option, offer the full standard set.
+		if ( empty( $formats ) ) {
+			$formats = \get_post_format_slugs();
+			unset( $formats['standard'] );
+			$formats = \array_values( $formats );
+		}
+
 		if ( \in_array( 'chat', $formats, true ) ) {
 			return;
 		}

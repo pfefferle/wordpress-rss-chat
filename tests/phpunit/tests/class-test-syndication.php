@@ -178,6 +178,27 @@ class Test_Syndication extends TestCase {
 	}
 
 	/**
+	 * A theme with no post formats (e.g. a block theme) gets the full set.
+	 */
+	public function test_adds_standard_formats_when_theme_declares_none() {
+		$before = \get_theme_support( 'post-formats' );
+		\remove_theme_support( 'post-formats' );
+
+		( new \RSS_Chat\Syndication() )->ensure_chat_post_format();
+
+		$formats = \get_theme_support( 'post-formats' )[0];
+		$this->assertContains( 'chat', $formats );
+		$this->assertContains( 'aside', $formats );
+		$this->assertContains( 'image', $formats );
+
+		// Restore prior theme support to avoid leaking global state.
+		\remove_theme_support( 'post-formats' );
+		if ( \is_array( $before ) && isset( $before[0] ) && \is_array( $before[0] ) ) {
+			\add_theme_support( 'post-formats', $before[0] );
+		}
+	}
+
+	/**
 	 * A comment created during backfeed import must never be pushed back.
 	 */
 	public function test_backfed_comment_is_not_pushed() {
