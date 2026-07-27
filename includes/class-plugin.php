@@ -46,6 +46,7 @@ class Plugin {
 		( new Settings() )->init();
 		( new REST() )->init();
 		( new Admin() )->init();
+		( new Dashboard() )->init();
 	}
 
 	/**

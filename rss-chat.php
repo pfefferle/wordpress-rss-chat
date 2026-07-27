@@ -36,6 +36,7 @@ require_once RSS_CHAT_PATH . 'includes/class-api.php';
 require_once RSS_CHAT_PATH . 'includes/class-settings.php';
 require_once RSS_CHAT_PATH . 'includes/class-rest.php';
 require_once RSS_CHAT_PATH . 'includes/class-admin.php';
+require_once RSS_CHAT_PATH . 'includes/class-dashboard.php';
 
 /**
  * Boot the plugin once WordPress is ready.
