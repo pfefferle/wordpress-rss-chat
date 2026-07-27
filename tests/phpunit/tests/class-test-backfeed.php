@@ -175,6 +175,23 @@ class Test_Backfeed extends WP_UnitTestCase {
 	}
 
 	/**
+	 * Imported comments are marked with the rss.chat protocol meta.
+	 */
+	public function test_sets_protocol_meta() {
+		$post_id = $this->synced_post();
+
+		( new Backfeed() )->run();
+
+		foreach ( $this->comments_on( $post_id ) as $comment ) {
+			$this->assertSame(
+				'rss.chat',
+				\get_comment_meta( $comment->comment_ID, 'protocol', true ),
+				'each imported comment carries protocol=rss.chat'
+			);
+		}
+	}
+
+	/**
 	 * The nested reply (203 -> 201) is threaded under the first reply's comment.
 	 */
 	public function test_threading_uses_in_reply_to() {

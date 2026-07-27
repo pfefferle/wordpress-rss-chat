@@ -200,6 +200,7 @@ class Backfeed {
 			return;
 		}
 
+		\update_comment_meta( $comment_id, 'protocol', Plugin::PROTOCOL );
 		\update_comment_meta( $comment_id, Syndication::POST_META_GUID, $item['guid'] );
 		if ( isset( $item['id'] ) ) {
 			\update_comment_meta( $comment_id, Syndication::POST_META_ID, (int) $item['id'] );

@@ -24,6 +24,12 @@ class Plugin {
 	const OPTION_ACCOUNT  = 'rss_chat_account';
 
 	/**
+	 * Value stored in the shared `protocol` comment meta to mark a comment as
+	 * originating from rss.chat (mirrors the ActivityPub plugin's convention).
+	 */
+	const PROTOCOL = 'rss.chat';
+
+	/**
 	 * Singleton instance.
 	 *
 	 * @var Plugin|null
