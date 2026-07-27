@@ -36,40 +36,6 @@ class Syndication {
 		// PHP_INT_MAX so this runs after every theme/plugin has registered its
 		// own post-format support, and we merge into the final list.
 		\add_action( 'after_setup_theme', array( $this, 'ensure_chat_post_format' ), PHP_INT_MAX );
-		\add_action( 'admin_notices', array( $this, 'show_push_error' ) );
-	}
-
-	/**
-	 * Show the reason a post failed to reach rss.chat, on its edit screen.
-	 *
-	 * @return void
-	 */
-	public function show_push_error() {
-		$screen = \get_current_screen();
-		if ( ! $screen || 'post' !== $screen->base ) {
-			return;
-		}
-
-		$post = \get_post();
-		if ( ! $post instanceof \WP_Post ) {
-			return;
-		}
-
-		$error = (string) \get_post_meta( $post->ID, Plugin::META_ERROR, true );
-		if ( '' === $error ) {
-			return;
-		}
-
-		printf(
-			'<div class="notice notice-error"><p>%s</p></div>',
-			\esc_html(
-				\sprintf(
-					/* translators: %s: error message from rss.chat. */
-					\__( 'RSS Chat could not publish this post to the network: %s', 'rss-chat' ),
-					$error
-				)
-			)
-		);
 	}
 
 	/**
@@ -110,7 +76,7 @@ class Syndication {
 	}
 
 	/**
-	 * wp_after_insert_post entry point (classic and programmatic saves).
+	 * Classic/programmatic entry point (the wp_after_insert_post action).
 	 *
 	 * @param int      $post_id Post id.
 	 * @param \WP_Post $post    The post.
@@ -169,12 +135,9 @@ class Syndication {
 
 		$result = ( new API() )->new_post( $item );
 		if ( \is_wp_error( $result ) ) {
-			// Keep the reason so it is not lost to a silent failure.
-			\update_post_meta( $post->ID, Plugin::META_ERROR, $result->get_error_message() );
 			return;
 		}
 
-		\delete_post_meta( $post->ID, Plugin::META_ERROR );
 		$this->store_result_ids(
 			$result,
 			function ( $key, $value ) use ( $post ) {

@@ -42,6 +42,23 @@ class API {
 	}
 
 	/**
+	 * Whether an email already has an account on the server.
+	 *
+	 * Returns true when the check cannot be made, so a transient error does not
+	 * wrongly send the owner off to register.
+	 *
+	 * @param string $email Email address.
+	 * @return bool
+	 */
+	public function email_exists( $email ) {
+		$result = $this->get( '/isemailindatabase', array( 'email' => $email ) );
+		if ( ! \is_array( $result ) ) {
+			return true;
+		}
+		return ! empty( $result['flInDatabase'] );
+	}
+
+	/**
 	 * Request a confirming login email.
 	 *
 	 * @param string $email        Email address to confirm.

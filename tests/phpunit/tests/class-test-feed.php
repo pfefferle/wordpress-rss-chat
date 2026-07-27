@@ -55,9 +55,23 @@ class Test_Feed extends TestCase {
 	 */
 	private function render_feed() {
 		$this->go_to( '/?feed=rss2' );
+
+		// The feed template calls header(); output has already started under
+		// PHPUnit, so swallow only that "headers already sent" warning.
+		// phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_set_error_handler -- Test-only: scope a single expected warning.
+		\set_error_handler(
+			static function ( $errno, $errstr ) {
+				return false !== \strpos( $errstr, 'Cannot modify header information' );
+			}
+		);
+
 		ob_start();
 		require ABSPATH . 'wp-includes/feed-rss2.php';
-		return (string) ob_get_clean();
+		$feed = (string) ob_get_clean();
+
+		\restore_error_handler();
+
+		return $feed;
 	}
 
 	/**

@@ -228,11 +228,19 @@ class Settings {
 			$this->redirect_back( 'bad_email' );
 		}
 
+		$api = new API();
+
+		// The login link only works for an existing account; guide first-timers
+		// to register on the network instead of failing with a cryptic error.
+		if ( ! $api->email_exists( $email ) ) {
+			$this->redirect_back( 'no_account' );
+		}
+
 		// A query-less redirect: rss.chat appends its result with "?", which
 		// would corrupt an existing query string. maybe_capture_login_redirect
 		// runs on admin_init, so any admin URL works as the landing page.
 		$redirect = \admin_url( 'options-general.php' );
-		$result   = ( new API() )->send_confirming_email( $email, $redirect );
+		$result   = $api->send_confirming_email( $email, $redirect );
 
 		$this->redirect_back( \is_wp_error( $result ) ? 'email_error' : 'email_sent' );
 	}
@@ -326,6 +334,18 @@ class Settings {
 					);
 					?>
 				</p>
+				<p class="description">
+					<?php
+					echo \wp_kses(
+						\sprintf(
+							/* translators: %s: link to the rss.chat server. */
+							\__( 'No account yet? Register at %s first, then sign in.', 'rss-chat' ),
+							$this->server_link()
+						),
+						$this->notice_link_tags()
+					);
+					?>
+				</p>
 				<form action="<?php echo \esc_url( \admin_url( 'admin-post.php' ) ); ?>" method="post">
 					<input type="hidden" name="action" value="rss_chat_send_email" />
 					<?php \wp_nonce_field( 'rss_chat_send_email' ); ?>
@@ -337,6 +357,36 @@ class Settings {
 	}
 
 	/**
+	 * A safe anchor to the configured rss.chat server (host shown as the label).
+	 *
+	 * @return string
+	 */
+	private function server_link() {
+		$server = Plugin::server_url();
+		return \sprintf(
+			'<a href="%1$s" target="_blank" rel="noopener noreferrer">%2$s</a>',
+			\esc_url( $server ),
+			\esc_html( \preg_replace( '#^https?://#', '', $server ) )
+		);
+	}
+
+	/**
+	 * Allowed tags for the link-bearing notices.
+	 *
+	 * @return array
+	 */
+	private function notice_link_tags() {
+		return array(
+			'code' => array(),
+			'a'    => array(
+				'href'   => array(),
+				'target' => array(),
+				'rel'    => array(),
+			),
+		);
+	}
+
+	/**
 	 * Render an admin notice for the login actions.
 	 *
 	 * @return void
@@ -345,6 +395,23 @@ class Settings {
 		// phpcs:ignore WordPress.Security.NonceVerification.Recommended -- Read-only display of a status slug.
 		$notice = isset( $_GET['rss_chat_notice'] ) ? \sanitize_key( \wp_unslash( $_GET['rss_chat_notice'] ) ) : '';
 		if ( '' === $notice ) {
+			return;
+		}
+
+		// The "register first" notice carries a link, so it is built separately.
+		if ( 'no_account' === $notice ) {
+			printf(
+				'<div class="notice notice-warning"><p>%s</p></div>',
+				\wp_kses(
+					\sprintf(
+						/* translators: 1: email address, 2: link to the rss.chat server. */
+						\__( 'No account was found for %1$s on the network. Create one at %2$s, then come back and click "Send login link".', 'rss-chat' ),
+						'<code>' . \esc_html( (string) \get_option( 'admin_email' ) ) . '</code>',
+						$this->server_link()
+					),
+					$this->notice_link_tags()
+				)
+			);
 			return;
 		}
 
