@@ -1,16 +1,18 @@
-=== RSS Chat ===
-Contributors: pfefferle
-Tags: rss, chat, indieweb, social, feeds
-Requires at least: 6.4
-Tested up to: 6.8
-Requires PHP: 7.4
-Stable tag: 0.1.0
-License: GPLv2 or later
-License URI: https://www.gnu.org/licenses/gpl-2.0.html
+# RSS Chat
+
+- Contributors: pfefferle
+- Donate link: https://notiz.blog/donate/
+- Tags: rss, chat, indieweb, social, feeds
+- Requires at least: 6.4
+- Tested up to: 6.8
+- Requires PHP: 7.4
+- Stable tag: 0.1.0
+- License: GPLv2 or later
+- License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
 Publish WordPress posts to the rss.chat network using the native chat post format, and get the replies back as comments.
 
-== Description ==
+## Description
 
 RSS Chat connects your WordPress site to the [rss.chat](https://rss.chat) network by Dave Winer using WordPress primitives, not a separate chat app. It follows the POSSE + backfeed pattern:
 
@@ -22,14 +24,25 @@ No custom post type, no new admin screen, no local copy of the network. One Word
 
 This is an early draft (0.1.0).
 
-== Installation ==
+## Installation
 
 1. Upload the `rss-chat` folder to `/wp-content/plugins/`.
 2. Activate the plugin.
 3. Go to **Settings → RSS Chat**, click **Send login link**, and open the link rss.chat sends to your admin email.
 4. Publish a post with the **chat** post format.
 
-== Changelog ==
+## Frequently Asked Questions
 
-= 0.1.0 =
+### Does this store a copy of the network in WordPress?
+
+No. Only your own posts and the replies to them live in WordPress, as regular posts and comments. There is no custom post type and no local mirror of the wider network.
+
+### Do I need an rss.chat account?
+
+You sign in once with a passwordless link sent to your WordPress admin email. The plugin then posts and reads replies on your behalf.
+
+## Changelog
+
+### 0.1.0
+
 * Initial draft: login, POSSE chat-format posts, comment replies, cron backfeed.
