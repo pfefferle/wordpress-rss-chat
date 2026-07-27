@@ -10,7 +10,8 @@
 		}
 	],
 	"require": {
-		"php": ">=7.4"
+		"php": ">=7.4",
+		"composer/installers": "^2.0"
 	},
 	"require-dev": {
 		"phpunit/phpunit": "^9",
@@ -24,6 +25,9 @@
 		"phpcsstandards/phpcsextra": "^1.1.0"
 	},
 	"autoload": {},
+	"extra": {
+		"installer-name": "rss-chat"
+	},
 	"scripts": {
 		"test": [
 			"composer install",
@@ -41,6 +45,9 @@
 		]
 	},
 	"config": {
-		"allow-plugins": true
+		"allow-plugins": true,
+		"platform": {
+			"php": "7.4"
+		}
 	}
 }
