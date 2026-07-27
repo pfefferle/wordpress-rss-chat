@@ -1,0 +1,99 @@
+/* RSS Chat admin screen */
+
+.rss-chat-wrap #rss-chat-app {
+	max-width: 640px;
+	margin-top: 1em;
+}
+
+.rss-chat-composer {
+	display: flex;
+	flex-direction: column;
+	gap: 8px;
+	background: #fff;
+	border: 1px solid #dcdcde;
+	border-radius: 6px;
+	padding: 12px;
+	margin-bottom: 16px;
+}
+
+.rss-chat-composer__text {
+	width: 100%;
+	resize: vertical;
+}
+
+.rss-chat-composer__hint {
+	font-size: 12px;
+	color: #646970;
+}
+
+.rss-chat-composer .button-primary {
+	align-self: flex-start;
+}
+
+.rss-chat-feed {
+	display: flex;
+	flex-direction: column;
+	gap: 12px;
+}
+
+.rss-chat-item {
+	background: #fff;
+	border: 1px solid #dcdcde;
+	border-radius: 6px;
+	padding: 12px 14px;
+}
+
+.rss-chat-item__head {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	margin-bottom: 6px;
+}
+
+.rss-chat-item__avatar {
+	width: 28px;
+	height: 28px;
+	border-radius: 50%;
+	object-fit: cover;
+}
+
+.rss-chat-item__author {
+	font-weight: 600;
+}
+
+.rss-chat-item__date {
+	color: #646970;
+	font-size: 12px;
+	margin-left: auto;
+}
+
+.rss-chat-item__title {
+	margin: 0 0 4px;
+	font-size: 15px;
+}
+
+.rss-chat-item__body {
+	white-space: pre-wrap;
+	word-break: break-word;
+}
+
+.rss-chat-item__actions {
+	display: flex;
+	gap: 16px;
+	margin-top: 8px;
+}
+
+.rss-chat-action {
+	color: #646970;
+	text-decoration: none;
+}
+
+.rss-chat-empty,
+.rss-chat-loading {
+	color: #646970;
+}
+
+.rss-chat-error {
+	margin: 0 0 12px;
+	padding: 8px 12px;
+}
