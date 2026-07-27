@@ -157,7 +157,7 @@ class Settings {
 	 * @return void
 	 */
 	public function render_server_section() {
-		echo '<p>' . \esc_html__( 'Choose which rss.chat instance this site talks to. Leave the default unless you run your own server.', 'rss-chat' ) . '</p>';
+		echo '<p>' . \esc_html__( 'Where this site connects to the network.', 'rss-chat' ) . '</p>';
 	}
 
 	/**
@@ -285,6 +285,7 @@ class Settings {
 		?>
 		<div class="wrap">
 			<h1><?php \esc_html_e( 'RSS Chat', 'rss-chat' ); ?></h1>
+			<p><?php \esc_html_e( 'Take part in the rss.chat network from your WordPress site. See the Help tab for how it works.', 'rss-chat' ); ?></p>
 
 			<form action="options.php" method="post">
 				<?php
@@ -295,7 +296,7 @@ class Settings {
 			</form>
 
 			<h2><?php \esc_html_e( 'Account', 'rss-chat' ); ?></h2>
-			<p><?php \esc_html_e( 'Connect this site to rss.chat. Your site is one identity on the network, signed in with your WordPress admin email. No password is stored.', 'rss-chat' ); ?></p>
+			<p><?php \esc_html_e( 'This site\'s connection to the network.', 'rss-chat' ); ?></p>
 			<?php if ( $connected ) : ?>
 				<p>
 					<?php
