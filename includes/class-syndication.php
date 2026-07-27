@@ -48,24 +48,28 @@ class Syndication {
 	 * @return void
 	 */
 	public function ensure_chat_post_format() {
-		$support = \get_theme_support( 'post-formats' );
-		$formats = ( \is_array( $support ) && isset( $support[0] ) && \is_array( $support[0] ) )
+		$support  = \get_theme_support( 'post-formats' );
+		$existing = ( \is_array( $support ) && isset( $support[0] ) && \is_array( $support[0] ) )
 			? $support[0]
 			: array();
 
-		// Block themes (and some others) declare no post formats at all. Rather
-		// than leave a lonely "Chat" option, offer the full standard set.
-		if ( empty( $formats ) ) {
-			$formats = \get_post_format_slugs();
-			unset( $formats['standard'] );
-			$formats = \array_values( $formats );
-		}
-
-		if ( \in_array( 'chat', $formats, true ) ) {
+		// The theme already offers chat; nothing to do.
+		if ( \in_array( 'chat', $existing, true ) ) {
 			return;
 		}
 
-		$formats[] = 'chat';
+		if ( empty( $existing ) ) {
+			// Block themes (and some others) declare no post formats. Offer the
+			// full standard set (which includes chat) rather than a lonely "Chat".
+			$formats = \get_post_format_slugs();
+			unset( $formats['standard'] );
+			$formats = \array_values( $formats );
+		} else {
+			// Keep the theme's own formats and add chat.
+			$formats   = $existing;
+			$formats[] = 'chat';
+		}
+
 		\add_theme_support( 'post-formats', $formats );
 	}
 
