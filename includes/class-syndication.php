@@ -26,7 +26,10 @@ class Syndication {
 	 * @return void
 	 */
 	public function init() {
-		\add_action( 'transition_post_status', array( $this, 'maybe_push_post' ), 10, 3 );
+		// wp_after_insert_post (not transition_post_status) so the post format
+		// term is already saved when we check it; the block editor writes terms
+		// after the status transition.
+		\add_action( 'wp_after_insert_post', array( $this, 'maybe_push_post' ), 10, 4 );
 		\add_action( 'wp_insert_comment', array( $this, 'maybe_push_comment' ), 10, 2 );
 		// PHP_INT_MAX so this runs after every theme/plugin has registered its
 		// own post-format support, and we merge into the final list.
@@ -38,9 +41,9 @@ class Syndication {
 	 * declares. Without it the format cannot be chosen in the editor, so the
 	 * plugin's per-post opt-in would be unreachable.
 	 *
-	 * add_theme_support() replaces the whole post-format list rather than adding
-	 * to it, so this reads the current list and re-registers it with "chat"
-	 * appended, never dropping the formats the theme already offers.
+	 * WordPress replaces the whole post-format list on each add_theme_support()
+	 * call rather than adding to it, so this reads the current list and
+	 * re-registers it with "chat" appended, never dropping the theme's formats.
 	 *
 	 * @return void
 	 */
@@ -61,16 +64,21 @@ class Syndication {
 	/**
 	 * Push a chat-format post when it first becomes published.
 	 *
-	 * @param string   $new_status New status.
-	 * @param string   $old_status Old status.
-	 * @param \WP_Post $post       The post.
+	 * @param int           $post_id     Post id.
+	 * @param \WP_Post      $post        The post.
+	 * @param bool          $update      Whether this is an update.
+	 * @param \WP_Post|null $post_before The post before this save, if any.
 	 * @return void
 	 */
-	public function maybe_push_post( $new_status, $old_status, $post ) {
-		if ( 'publish' !== $new_status || 'publish' === $old_status ) {
+	public function maybe_push_post( $post_id, $post, $update, $post_before ) {
+		if ( \wp_is_post_revision( $post_id ) || \wp_is_post_autosave( $post_id ) ) {
 			return;
 		}
-		if ( 'post' !== $post->post_type ) {
+		if ( 'post' !== $post->post_type || 'publish' !== $post->post_status ) {
+			return;
+		}
+		// Only on the transition into publish, not on later edits.
+		if ( $post_before instanceof \WP_Post && 'publish' === $post_before->post_status ) {
 			return;
 		}
 		if ( 'chat' !== \get_post_format( $post ) ) {
@@ -79,8 +87,8 @@ class Syndication {
 		if ( ! Plugin::is_connected() ) {
 			return;
 		}
-		// Already synced (e.g. a re-publish): don't create a duplicate.
-		if ( '' !== (string) \get_post_meta( $post->ID, Plugin::META_ID, true ) ) {
+		// Already synced: don't create a duplicate.
+		if ( '' !== (string) \get_post_meta( $post_id, Plugin::META_ID, true ) ) {
 			return;
 		}
 
