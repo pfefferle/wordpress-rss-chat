@@ -28,6 +28,29 @@ class Syndication {
 	public function init() {
 		\add_action( 'transition_post_status', array( $this, 'maybe_push_post' ), 10, 3 );
 		\add_action( 'wp_insert_comment', array( $this, 'maybe_push_comment' ), 10, 2 );
+		\add_action( 'after_setup_theme', array( $this, 'ensure_chat_post_format' ), 99 );
+	}
+
+	/**
+	 * Make sure the "chat" post format is available whatever the active theme
+	 * declares. Without it the format cannot be chosen in the editor, so the
+	 * plugin's per-post opt-in would be unreachable. Runs late so it merges with,
+	 * rather than replaces, the theme's own post-format support.
+	 *
+	 * @return void
+	 */
+	public function ensure_chat_post_format() {
+		$support = \get_theme_support( 'post-formats' );
+		$formats = ( \is_array( $support ) && isset( $support[0] ) && \is_array( $support[0] ) )
+			? $support[0]
+			: array();
+
+		if ( \in_array( 'chat', $formats, true ) ) {
+			return;
+		}
+
+		$formats[] = 'chat';
+		\add_theme_support( 'post-formats', $formats );
 	}
 
 	/**
