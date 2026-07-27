@@ -26,14 +26,50 @@ class Syndication {
 	 * @return void
 	 */
 	public function init() {
-		// wp_after_insert_post (not transition_post_status) so the post format
-		// term is already saved when we check it; the block editor writes terms
-		// after the status transition.
-		\add_action( 'wp_after_insert_post', array( $this, 'maybe_push_post' ), 10, 4 );
+		// Two entry points so the post format is already saved when we check it:
+		// classic/programmatic saves finish in wp_after_insert_post, while the
+		// block editor (REST) sets the format after that, before rest_after_insert.
+		// The "already synced" guard keeps a single save from pushing twice.
+		\add_action( 'wp_after_insert_post', array( $this, 'push_from_insert' ), 10, 2 );
+		\add_action( 'rest_after_insert_post', array( $this, 'push_from_rest' ), 10, 1 );
 		\add_action( 'wp_insert_comment', array( $this, 'maybe_push_comment' ), 10, 2 );
 		// PHP_INT_MAX so this runs after every theme/plugin has registered its
 		// own post-format support, and we merge into the final list.
 		\add_action( 'after_setup_theme', array( $this, 'ensure_chat_post_format' ), PHP_INT_MAX );
+		\add_action( 'admin_notices', array( $this, 'show_push_error' ) );
+	}
+
+	/**
+	 * Show the reason a post failed to reach rss.chat, on its edit screen.
+	 *
+	 * @return void
+	 */
+	public function show_push_error() {
+		$screen = \get_current_screen();
+		if ( ! $screen || 'post' !== $screen->base ) {
+			return;
+		}
+
+		$post = \get_post();
+		if ( ! $post instanceof \WP_Post ) {
+			return;
+		}
+
+		$error = (string) \get_post_meta( $post->ID, Plugin::META_ERROR, true );
+		if ( '' === $error ) {
+			return;
+		}
+
+		printf(
+			'<div class="notice notice-error"><p>%s</p></div>',
+			\esc_html(
+				\sprintf(
+					/* translators: %s: error message from rss.chat. */
+					\__( 'RSS Chat could not publish this post to the network: %s', 'rss-chat' ),
+					$error
+				)
+			)
+		);
 	}
 
 	/**
@@ -74,23 +110,41 @@ class Syndication {
 	}
 
 	/**
-	 * Push a chat-format post when it first becomes published.
+	 * wp_after_insert_post entry point (classic and programmatic saves).
 	 *
-	 * @param int           $post_id     Post id.
-	 * @param \WP_Post      $post        The post.
-	 * @param bool          $update      Whether this is an update.
-	 * @param \WP_Post|null $post_before The post before this save, if any.
+	 * @param int      $post_id Post id.
+	 * @param \WP_Post $post    The post.
 	 * @return void
 	 */
-	public function maybe_push_post( $post_id, $post, $update, $post_before ) {
-		if ( \wp_is_post_revision( $post_id ) || \wp_is_post_autosave( $post_id ) ) {
+	public function push_from_insert( $post_id, $post ) {
+		$this->maybe_push_post( $post );
+	}
+
+	/**
+	 * Block editor entry point (the rest_after_insert_post action), which fires
+	 * after the post format has been saved.
+	 *
+	 * @param \WP_Post $post The post.
+	 * @return void
+	 */
+	public function push_from_rest( $post ) {
+		$this->maybe_push_post( $post );
+	}
+
+	/**
+	 * Push a published chat-format post to rss.chat, once.
+	 *
+	 * @param \WP_Post $post The post.
+	 * @return void
+	 */
+	private function maybe_push_post( $post ) {
+		if ( ! $post instanceof \WP_Post ) {
+			return;
+		}
+		if ( \wp_is_post_revision( $post->ID ) || \wp_is_post_autosave( $post->ID ) ) {
 			return;
 		}
 		if ( 'post' !== $post->post_type || 'publish' !== $post->post_status ) {
-			return;
-		}
-		// Only on the transition into publish, not on later edits.
-		if ( $post_before instanceof \WP_Post && 'publish' === $post_before->post_status ) {
 			return;
 		}
 		if ( 'chat' !== \get_post_format( $post ) ) {
@@ -100,7 +154,7 @@ class Syndication {
 			return;
 		}
 		// Already synced: don't create a duplicate.
-		if ( '' !== (string) \get_post_meta( $post_id, Plugin::META_ID, true ) ) {
+		if ( '' !== (string) \get_post_meta( $post->ID, Plugin::META_ID, true ) ) {
 			return;
 		}
 
@@ -115,9 +169,12 @@ class Syndication {
 
 		$result = ( new API() )->new_post( $item );
 		if ( \is_wp_error( $result ) ) {
+			// Keep the reason so it is not lost to a silent failure.
+			\update_post_meta( $post->ID, Plugin::META_ERROR, $result->get_error_message() );
 			return;
 		}
 
+		\delete_post_meta( $post->ID, Plugin::META_ERROR );
 		$this->store_result_ids(
 			$result,
 			function ( $key, $value ) use ( $post ) {

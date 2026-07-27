@@ -30,6 +30,7 @@ class Plugin {
 	const META_ID       = '_rss_chat_id';
 	const META_GUID     = '_rss_chat_guid';
 	const META_PROTOCOL = 'protocol';
+	const META_ERROR    = '_rss_chat_error';
 
 	/**
 	 * Value stored in the shared `protocol` comment meta to mark a comment as
