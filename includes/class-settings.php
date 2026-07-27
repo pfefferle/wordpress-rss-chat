@@ -51,6 +51,71 @@ class Settings {
 
 		// Capture the rss.chat login redirect only when our page loads.
 		\add_action( 'load-' . $hook, array( $this, 'maybe_capture_login_redirect' ) );
+
+		// Contextual help explaining how the plugin works.
+		\add_action( 'load-' . $hook, array( $this, 'add_help_tabs' ) );
+	}
+
+	/**
+	 * Add contextual Help tabs to the settings screen.
+	 *
+	 * @return void
+	 */
+	public function add_help_tabs() {
+		$screen = \get_current_screen();
+		if ( ! $screen ) {
+			return;
+		}
+
+		$screen->add_help_tab(
+			array(
+				'id'      => 'rss-chat-overview',
+				'title'   => \__( 'How it works', 'rss-chat' ),
+				'content' =>
+					'<h2>' . \esc_html__( 'How it works', 'rss-chat' ) . '</h2>' .
+					'<p>' . \esc_html__( 'RSS Chat connects your site to the rss.chat network using WordPress you already know: your posts and comments. There is no separate chat app and no local copy of the network. Your site is one rss.chat identity, the site owner.', 'rss-chat' ) . '</p>' .
+					'<p>' . \esc_html__( 'It works in two directions: your chat posts are pushed to rss.chat, and the replies come back to you as comments.', 'rss-chat' ) . '</p>',
+			)
+		);
+
+		$screen->add_help_tab(
+			array(
+				'id'      => 'rss-chat-posting',
+				'title'   => \__( 'Posting', 'rss-chat' ),
+				'content' =>
+					'<h2>' . \esc_html__( 'Posting to the network', 'rss-chat' ) . '</h2>' .
+					'<p>' . \esc_html__( 'Write a normal post and give it the built-in "chat" post format. When you publish it, the post is pushed to rss.chat as a new item. Posts in any other format are left alone.', 'rss-chat' ) . '</p>' .
+					'<p>' . \esc_html__( 'Nothing extra is stored: the post stays a normal WordPress post, and a note of its rss.chat id is kept so replies can find their way back.', 'rss-chat' ) . '</p>',
+			)
+		);
+
+		$screen->add_help_tab(
+			array(
+				'id'      => 'rss-chat-replies',
+				'title'   => \__( 'Replies', 'rss-chat' ),
+				'content' =>
+					'<h2>' . \esc_html__( 'Replies and comments', 'rss-chat' ) . '</h2>' .
+					'<p>' . \esc_html__( 'Every few minutes the plugin checks your pushed posts for replies on rss.chat and stores new ones as comments, keeping the thread structure. These comments are marked so they are not sent back out again.', 'rss-chat' ) . '</p>' .
+					'<p>' . \esc_html__( 'When you reply from WordPress, a comment on one of your synced posts is pushed back to rss.chat as a reply. Comments and replies stay in sync both ways.', 'rss-chat' ) . '</p>',
+			)
+		);
+
+		$screen->add_help_tab(
+			array(
+				'id'      => 'rss-chat-setup',
+				'title'   => \__( 'Setup', 'rss-chat' ),
+				'content' =>
+					'<h2>' . \esc_html__( 'Signing in', 'rss-chat' ) . '</h2>' .
+					'<p>' . \esc_html__( 'Click "Send login link" to receive a confirmation link at your WordPress admin email. Open it and you are brought back here, connected. No password is stored, and the address is not editable: it is always your admin email.', 'rss-chat' ) . '</p>' .
+					'<p>' . \esc_html__( 'By default you connect to https://rss.chat. Change the server URL above to use a self-hosted instance.', 'rss-chat' ) . '</p>',
+			)
+		);
+
+		$screen->set_help_sidebar(
+			'<p><strong>' . \esc_html__( 'For more information:', 'rss-chat' ) . '</strong></p>' .
+			'<p><a href="' . \esc_url( 'https://rss.chat' ) . '">' . \esc_html__( 'The rss.chat network', 'rss-chat' ) . '</a></p>' .
+			'<p><a href="' . \esc_url( 'https://github.com/scripting/rss.chat' ) . '">' . \esc_html__( 'rss.chat on GitHub', 'rss-chat' ) . '</a></p>'
+		);
 	}
 
 	/**
