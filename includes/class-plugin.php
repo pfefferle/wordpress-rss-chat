@@ -57,6 +57,7 @@ class Plugin {
 		( new Settings() )->init();
 		( new Syndication() )->init();
 		( new Backfeed() )->init();
+		( new Feed() )->init();
 	}
 
 	/**
