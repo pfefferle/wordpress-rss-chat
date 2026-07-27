@@ -9,15 +9,13 @@
 
 namespace RSS_Chat\Tests;
 
-use WP_UnitTestCase;
 use RSS_Chat\Plugin;
-use RSS_Chat\Syndication;
 use RSS_Chat\Backfeed;
 
 /**
  * Backfeed tests.
  */
-class Test_Backfeed extends WP_UnitTestCase {
+class Test_Backfeed extends TestCase {
 
 	/**
 	 * Whether a /newpost push happened (should never, during import).
@@ -34,19 +32,10 @@ class Test_Backfeed extends WP_UnitTestCase {
 	private $rss_id = 200;
 
 	/**
-	 * Set up: connect as "me" and stub the reply feed.
+	 * Set up: stub the reply feed.
 	 */
 	public function set_up(): void {
 		parent::set_up();
-
-		\update_option(
-			Plugin::OPTION_ACCOUNT,
-			array(
-				'email'      => 'me@example.com',
-				'code'       => 'secret-code',
-				'screenname' => 'me',
-			)
-		);
 
 		$this->pushed = false;
 		\add_filter( 'pre_http_request', array( $this, 'stub_http' ), 10, 3 );
@@ -57,8 +46,6 @@ class Test_Backfeed extends WP_UnitTestCase {
 	 */
 	public function tear_down(): void {
 		\remove_filter( 'pre_http_request', array( $this, 'stub_http' ), 10 );
-		\delete_option( Plugin::OPTION_ACCOUNT );
-		Backfeed::$importing = false;
 		parent::tear_down();
 	}
 
@@ -73,19 +60,11 @@ class Test_Backfeed extends WP_UnitTestCase {
 	public function stub_http( $response, $args, $url ) {
 		if ( false !== \strpos( $url, '/newpost' ) ) {
 			$this->pushed = true;
-			return array(
-				'response' => array( 'code' => 200 ),
-				'headers'  => new \WpOrg\Requests\Utility\CaseInsensitiveDictionary( array() ),
-				'body'     => '{"id":1,"guid":"x"}',
-			);
+			return $this->mock_http_response( '{"id":1,"guid":"x"}' );
 		}
 
 		if ( false !== \strpos( $url, '/getitemandreplies' ) ) {
-			return array(
-				'response' => array( 'code' => 200 ),
-				'headers'  => new \WpOrg\Requests\Utility\CaseInsensitiveDictionary( array() ),
-				'body'     => (string) \wp_json_encode( $this->feed() ),
-			);
+			return $this->mock_http_response( (string) \wp_json_encode( $this->feed() ) );
 		}
 
 		return $response;
@@ -139,7 +118,7 @@ class Test_Backfeed extends WP_UnitTestCase {
 	 */
 	private function synced_post() {
 		$post_id = self::factory()->post->create( array( 'post_status' => 'publish' ) );
-		\update_post_meta( $post_id, Syndication::POST_META_ID, $this->rss_id );
+		\update_post_meta( $post_id, Plugin::META_ID, $this->rss_id );
 		return $post_id;
 	}
 
@@ -166,7 +145,7 @@ class Test_Backfeed extends WP_UnitTestCase {
 
 		$guids = array();
 		foreach ( $comments as $comment ) {
-			$guids[] = \get_comment_meta( $comment->comment_ID, Syndication::POST_META_GUID, true );
+			$guids[] = \get_comment_meta( $comment->comment_ID, Plugin::META_GUID, true );
 		}
 		$this->assertContains( 'https://rss.chat/?id=201', $guids );
 		$this->assertContains( 'https://rss.chat/?id=203', $guids );
@@ -184,8 +163,8 @@ class Test_Backfeed extends WP_UnitTestCase {
 
 		foreach ( $this->comments_on( $post_id ) as $comment ) {
 			$this->assertSame(
-				'rss.chat',
-				\get_comment_meta( $comment->comment_ID, 'protocol', true ),
+				Plugin::PROTOCOL,
+				\get_comment_meta( $comment->comment_ID, Plugin::META_PROTOCOL, true ),
 				'each imported comment carries protocol=rss.chat'
 			);
 		}
@@ -201,7 +180,7 @@ class Test_Backfeed extends WP_UnitTestCase {
 
 		$by_rss_id = array();
 		foreach ( $this->comments_on( $post_id ) as $comment ) {
-			$rid               = (int) \get_comment_meta( $comment->comment_ID, Syndication::POST_META_ID, true );
+			$rid               = (int) \get_comment_meta( $comment->comment_ID, Plugin::META_ID, true );
 			$by_rss_id[ $rid ] = $comment;
 		}
 

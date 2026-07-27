@@ -53,3 +53,6 @@ function rss_chat_http_disable_request( $response, $args, $url ) {
 
 // Start up the WP testing environment.
 require $_tests_dir . '/includes/bootstrap.php';
+
+// Base test case (extends WP_UnitTestCase, which the bootstrap above defines).
+require_once __DIR__ . '/class-testcase.php';

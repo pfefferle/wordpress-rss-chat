@@ -9,15 +9,13 @@
 
 namespace RSS_Chat\Tests;
 
-use WP_UnitTestCase;
 use RSS_Chat\Plugin;
-use RSS_Chat\Syndication;
 use RSS_Chat\Backfeed;
 
 /**
  * Syndication tests.
  */
-class Test_Syndication extends WP_UnitTestCase {
+class Test_Syndication extends TestCase {
 
 	/**
 	 * Captured /newpost request URLs during a test.
@@ -27,19 +25,10 @@ class Test_Syndication extends WP_UnitTestCase {
 	private $newposts = array();
 
 	/**
-	 * Set up: connect an account and stub /newpost.
+	 * Set up: stub /newpost.
 	 */
 	public function set_up(): void {
 		parent::set_up();
-
-		\update_option(
-			Plugin::OPTION_ACCOUNT,
-			array(
-				'email'      => 'me@example.com',
-				'code'       => 'secret-code',
-				'screenname' => 'me',
-			)
-		);
 
 		$this->newposts = array();
 		\add_filter( 'pre_http_request', array( $this, 'stub_http' ), 10, 3 );
@@ -50,8 +39,6 @@ class Test_Syndication extends WP_UnitTestCase {
 	 */
 	public function tear_down(): void {
 		\remove_filter( 'pre_http_request', array( $this, 'stub_http' ), 10 );
-		\delete_option( Plugin::OPTION_ACCOUNT );
-		Backfeed::$importing = false;
 		parent::tear_down();
 	}
 
@@ -66,15 +53,13 @@ class Test_Syndication extends WP_UnitTestCase {
 	public function stub_http( $response, $args, $url ) {
 		if ( false !== \strpos( $url, '/newpost' ) ) {
 			$this->newposts[] = $url;
-			return array(
-				'response' => array( 'code' => 200 ),
-				'headers'  => new \WpOrg\Requests\Utility\CaseInsensitiveDictionary( array() ),
-				'body'     => (string) \wp_json_encode(
+			return $this->mock_http_response(
+				(string) \wp_json_encode(
 					array(
 						'id'   => 4242,
 						'guid' => 'https://rss.chat/?id=4242',
 					)
-				),
+				)
 			);
 		}
 		return $response;
@@ -94,37 +79,14 @@ class Test_Syndication extends WP_UnitTestCase {
 	}
 
 	/**
-	 * Create a published post with the chat post format.
-	 *
-	 * @return int Post id.
-	 */
-	private function create_chat_post() {
-		$post_id = self::factory()->post->create(
-			array(
-				'post_status'  => 'draft',
-				'post_title'   => 'Hello network',
-				'post_content' => 'This is a chat post.',
-			)
-		);
-		\set_post_format( $post_id, 'chat' );
-		\wp_update_post(
-			array(
-				'ID'          => $post_id,
-				'post_status' => 'publish',
-			)
-		);
-		return $post_id;
-	}
-
-	/**
 	 * A published chat-format post is pushed and its ids stored.
 	 */
 	public function test_publish_chat_post_pushes_and_stores_meta() {
 		$post_id = $this->create_chat_post();
 
 		$this->assertCount( 1, $this->newposts, 'chat post should push exactly once' );
-		$this->assertSame( 4242, (int) \get_post_meta( $post_id, Syndication::POST_META_ID, true ) );
-		$this->assertSame( 'https://rss.chat/?id=4242', \get_post_meta( $post_id, Syndication::POST_META_GUID, true ) );
+		$this->assertSame( 4242, (int) \get_post_meta( $post_id, Plugin::META_ID, true ) );
+		$this->assertSame( 'https://rss.chat/?id=4242', \get_post_meta( $post_id, Plugin::META_GUID, true ) );
 	}
 
 	/**
@@ -164,7 +126,7 @@ class Test_Syndication extends WP_UnitTestCase {
 	 * Without a stored credential, nothing is pushed.
 	 */
 	public function test_not_connected_skips_push() {
-		\delete_option( Plugin::OPTION_ACCOUNT );
+		Plugin::clear_account();
 
 		$this->create_chat_post();
 
@@ -176,7 +138,7 @@ class Test_Syndication extends WP_UnitTestCase {
 	 */
 	public function test_comment_on_synced_post_pushes_reply() {
 		$post_id = self::factory()->post->create( array( 'post_status' => 'publish' ) );
-		\update_post_meta( $post_id, Syndication::POST_META_ID, 100 );
+		\update_post_meta( $post_id, Plugin::META_ID, 100 );
 
 		self::factory()->comment->create(
 			array(
@@ -196,7 +158,7 @@ class Test_Syndication extends WP_UnitTestCase {
 	 */
 	public function test_backfed_comment_is_not_pushed() {
 		$post_id = self::factory()->post->create( array( 'post_status' => 'publish' ) );
-		\update_post_meta( $post_id, Syndication::POST_META_ID, 100 );
+		\update_post_meta( $post_id, Plugin::META_ID, 100 );
 
 		Backfeed::$importing = true;
 		self::factory()->comment->create(

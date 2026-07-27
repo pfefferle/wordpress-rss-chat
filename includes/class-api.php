@@ -19,17 +19,6 @@ if ( ! defined( 'ABSPATH' ) ) {
 class API {
 
 	/**
-	 * Fetch the most recent items on the server, newest first.
-	 *
-	 * @param int $count Number of items (server caps at 100).
-	 * @return array|\WP_Error Decoded JSON array or error.
-	 */
-	public function get_recent_items( $count = 25 ) {
-		$count = max( 1, min( 100, (int) $count ) );
-		return $this->get( '/getrecentitems', array( 'ct' => $count ) );
-	}
-
-	/**
 	 * Fetch a post and its direct replies, oldest first.
 	 *
 	 * @param int $idparent Parent post id.
@@ -37,16 +26,6 @@ class API {
 	 */
 	public function get_item_and_replies( $idparent ) {
 		return $this->get( '/getitemandreplies', array( 'idparent' => (int) $idparent ) );
-	}
-
-	/**
-	 * Fetch recent items by a single user.
-	 *
-	 * @param string $name Screen name.
-	 * @return array|\WP_Error
-	 */
-	public function get_recent_user_items( $name ) {
-		return $this->get( '/getrecentuseritems', array( 'name' => $name ) );
 	}
 
 	/**
@@ -60,26 +39,6 @@ class API {
 			'/newpost',
 			array( 'jsontext' => \wp_json_encode( $item ) )
 		);
-	}
-
-	/**
-	 * Toggle a like on a post.
-	 *
-	 * @param int $id Post id.
-	 * @return array|\WP_Error
-	 */
-	public function toggle_like( $id ) {
-		return $this->post( '/togglelike', array( 'id' => (int) $id ) );
-	}
-
-	/**
-	 * Soft-delete one of the owner's posts.
-	 *
-	 * @param int $id Post id.
-	 * @return array|\WP_Error
-	 */
-	public function delete_post( $id ) {
-		return $this->post( '/deletepost', array( 'id' => (int) $id ) );
 	}
 
 	/**
@@ -107,16 +66,7 @@ class API {
 	 * @return array|\WP_Error
 	 */
 	private function get( $path, array $query = array() ) {
-		$url      = Plugin::server_url() . $path;
-		$url      = \add_query_arg( \array_map( 'rawurlencode', $query ), $url );
-		$response = \wp_remote_get(
-			$url,
-			array(
-				'timeout' => 15,
-				'headers' => array( 'Accept' => 'application/json' ),
-			)
-		);
-		return $this->parse( $response );
+		return $this->request( 'GET', $path, $query );
 	}
 
 	/**
@@ -141,15 +91,32 @@ class API {
 		$query['emailaddress'] = $account['email'];
 		$query['emailcode']    = $account['code'];
 
-		$url      = Plugin::server_url() . $path;
-		$url      = \add_query_arg( \array_map( 'rawurlencode', $query ), $url );
-		$response = \wp_remote_post(
+		return $this->request( 'POST', $path, $query );
+	}
+
+	/**
+	 * Build the URL, make the request, and parse the response.
+	 *
+	 * @param string $method HTTP method.
+	 * @param string $path   Endpoint path beginning with a slash.
+	 * @param array  $query  Query args.
+	 * @return array|\WP_Error
+	 */
+	private function request( $method, $path, array $query ) {
+		$url = \add_query_arg(
+			\array_map( 'rawurlencode', $query ),
+			Plugin::server_url() . $path
+		);
+
+		$response = \wp_remote_request(
 			$url,
 			array(
+				'method'  => $method,
 				'timeout' => 15,
 				'headers' => array( 'Accept' => 'application/json' ),
 			)
 		);
+
 		return $this->parse( $response );
 	}
 
@@ -177,13 +144,6 @@ class API {
 			);
 		}
 
-		$data = \json_decode( $body, true );
-
-		// Some endpoints return a JSON-encoded string; hand it back as-is.
-		if ( null === $data && '' !== $body ) {
-			return array( 'raw' => $body );
-		}
-
-		return $data;
+		return \json_decode( $body, true );
 	}
 }

@@ -24,6 +24,14 @@ class Plugin {
 	const OPTION_ACCOUNT  = 'rss_chat_account';
 
 	/**
+	 * Shared meta vocabulary. The rss.chat id and guid are stored on both posts
+	 * and comments, so the keys live here rather than on any one component.
+	 */
+	const META_ID       = '_rss_chat_id';
+	const META_GUID     = '_rss_chat_guid';
+	const META_PROTOCOL = 'protocol';
+
+	/**
 	 * Value stored in the shared `protocol` comment meta to mark a comment as
 	 * originating from rss.chat (mirrors the ActivityPub plugin's convention).
 	 */
@@ -66,12 +74,23 @@ class Plugin {
 	 * @return array{server_url:string}
 	 */
 	public static function get_settings() {
-		$stored = \get_option( self::OPTION_SETTINGS, array() );
+		return self::get_option_array( self::OPTION_SETTINGS, self::default_settings() );
+	}
+
+	/**
+	 * Read an option, coerce it to an array, and fill in defaults.
+	 *
+	 * @param string $name     Option name.
+	 * @param array  $defaults Default values.
+	 * @return array
+	 */
+	private static function get_option_array( $name, array $defaults ) {
+		$stored = \get_option( $name, array() );
 		if ( ! \is_array( $stored ) ) {
 			$stored = array();
 		}
 
-		return \wp_parse_args( $stored, self::default_settings() );
+		return \wp_parse_args( $stored, $defaults );
 	}
 
 	/**
@@ -107,13 +126,8 @@ class Plugin {
 	 * @return array{email:string,code:string,screenname:string}
 	 */
 	public static function get_account() {
-		$stored = \get_option( self::OPTION_ACCOUNT, array() );
-		if ( ! \is_array( $stored ) ) {
-			$stored = array();
-		}
-
-		return \wp_parse_args(
-			$stored,
+		return self::get_option_array(
+			self::OPTION_ACCOUNT,
 			array(
 				'email'      => '',
 				'code'       => '',

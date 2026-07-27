@@ -41,9 +41,7 @@ class Backfeed {
 		\add_filter( 'cron_schedules', array( $this, 'add_interval' ) ); // phpcs:ignore WordPress.WP.CronInterval.CronSchedulesInterval
 		\add_action( self::HOOK, array( $this, 'run' ) );
 
-		if ( ! \wp_next_scheduled( self::HOOK ) ) {
-			self::schedule();
-		}
+		self::schedule();
 	}
 
 	/**
@@ -95,14 +93,14 @@ class Backfeed {
 				'post_type'      => 'post',
 				'posts_per_page' => 100,
 				'fields'         => 'ids',
-				'meta_key'       => Syndication::POST_META_ID, // phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_key
+				'meta_key'       => Plugin::META_ID, // phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_key
 			)
 		);
 
 		$own = Plugin::get_account()['screenname'];
 
 		foreach ( $posts as $post_id ) {
-			$rss_id = (int) \get_post_meta( $post_id, Syndication::POST_META_ID, true );
+			$rss_id = (int) \get_post_meta( $post_id, Plugin::META_ID, true );
 			if ( $rss_id <= 0 ) {
 				continue;
 			}
@@ -151,15 +149,26 @@ class Backfeed {
 	 * @return bool
 	 */
 	private function already_imported( $guid ) {
-		$existing = \get_comments(
+		return $this->find_comment_id_by_meta( Plugin::META_GUID, $guid ) > 0;
+	}
+
+	/**
+	 * Find the first comment carrying a given meta key/value.
+	 *
+	 * @param string $key   Meta key.
+	 * @param mixed  $value Meta value.
+	 * @return int Comment id, or 0 if none.
+	 */
+	private function find_comment_id_by_meta( $key, $value ) {
+		$ids = \get_comments(
 			array(
-				'meta_key'   => Syndication::POST_META_GUID, // phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_key
-				'meta_value' => $guid, // phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_value
+				'meta_key'   => $key, // phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_key
+				'meta_value' => $value, // phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_value
 				'number'     => 1,
 				'fields'     => 'ids',
 			)
 		);
-		return ! empty( $existing );
+		return empty( $ids ) ? 0 : (int) $ids[0];
 	}
 
 	/**
@@ -200,10 +209,10 @@ class Backfeed {
 			return;
 		}
 
-		\update_comment_meta( $comment_id, 'protocol', Plugin::PROTOCOL );
-		\update_comment_meta( $comment_id, Syndication::POST_META_GUID, $item['guid'] );
+		\update_comment_meta( $comment_id, Plugin::META_PROTOCOL, Plugin::PROTOCOL );
+		\update_comment_meta( $comment_id, Plugin::META_GUID, $item['guid'] );
 		if ( isset( $item['id'] ) ) {
-			\update_comment_meta( $comment_id, Syndication::POST_META_ID, (int) $item['id'] );
+			\update_comment_meta( $comment_id, Plugin::META_ID, (int) $item['id'] );
 		}
 	}
 
@@ -219,15 +228,6 @@ class Backfeed {
 			return 0;
 		}
 
-		$parents = \get_comments(
-			array(
-				'meta_key'   => Syndication::POST_META_ID, // phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_key
-				'meta_value' => (int) $item['inReplyToNum'], // phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_value
-				'number'     => 1,
-				'fields'     => 'ids',
-			)
-		);
-
-		return empty( $parents ) ? 0 : (int) $parents[0];
+		return $this->find_comment_id_by_meta( Plugin::META_ID, (int) $item['inReplyToNum'] );
 	}
 }

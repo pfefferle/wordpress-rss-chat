@@ -20,9 +20,6 @@ if ( ! defined( 'ABSPATH' ) ) {
  */
 class Syndication {
 
-	const POST_META_ID   = '_rss_chat_id';
-	const POST_META_GUID = '_rss_chat_guid';
-
 	/**
 	 * Hook into WordPress.
 	 *
@@ -55,7 +52,7 @@ class Syndication {
 			return;
 		}
 		// Already synced (e.g. a re-publish): don't create a duplicate.
-		if ( '' !== (string) \get_post_meta( $post->ID, self::POST_META_ID, true ) ) {
+		if ( '' !== (string) \get_post_meta( $post->ID, Plugin::META_ID, true ) ) {
 			return;
 		}
 
@@ -73,7 +70,12 @@ class Syndication {
 			return;
 		}
 
-		$this->store_post_ids( $post->ID, $result );
+		$this->store_result_ids(
+			$result,
+			function ( $key, $value ) use ( $post ) {
+				\update_post_meta( $post->ID, $key, $value );
+			}
+		);
 	}
 
 	/**
@@ -91,7 +93,7 @@ class Syndication {
 		if ( 1 !== (int) $comment->comment_approved ) {
 			return;
 		}
-		if ( '' !== (string) \get_comment_meta( $comment_id, self::POST_META_GUID, true ) ) {
+		if ( '' !== (string) \get_comment_meta( $comment_id, Plugin::META_GUID, true ) ) {
 			return;
 		}
 		if ( ! Plugin::is_connected() ) {
@@ -113,12 +115,12 @@ class Syndication {
 			return;
 		}
 
-		if ( isset( $result['id'] ) ) {
-			\update_comment_meta( $comment_id, self::POST_META_ID, (int) $result['id'] );
-		}
-		if ( isset( $result['guid'] ) ) {
-			\update_comment_meta( $comment_id, self::POST_META_GUID, $result['guid'] );
-		}
+		$this->store_result_ids(
+			$result,
+			function ( $key, $value ) use ( $comment_id ) {
+				\update_comment_meta( $comment_id, $key, $value );
+			}
+		);
 	}
 
 	/**
@@ -130,28 +132,31 @@ class Syndication {
 	 */
 	private function resolve_reply_target( $comment ) {
 		if ( (int) $comment->comment_parent > 0 ) {
-			$parent = (int) \get_comment_meta( $comment->comment_parent, self::POST_META_ID, true );
+			$parent = (int) \get_comment_meta( $comment->comment_parent, Plugin::META_ID, true );
 			if ( $parent > 0 ) {
 				return $parent;
 			}
 		}
 
-		return (int) \get_post_meta( $comment->comment_post_ID, self::POST_META_ID, true );
+		return (int) \get_post_meta( $comment->comment_post_ID, Plugin::META_ID, true );
 	}
 
 	/**
-	 * Persist the rss.chat id and guid returned for a pushed post.
+	 * Write the rss.chat id and guid from a /newpost response.
 	 *
-	 * @param int   $post_id Post id.
-	 * @param array $result  Decoded /newpost response.
+	 * The response shape lives here once; the caller's setter decides whether
+	 * the ids land on a post or a comment.
+	 *
+	 * @param array    $result Decoded /newpost response.
+	 * @param callable $store  Receives ( string $key, mixed $value ).
 	 * @return void
 	 */
-	private function store_post_ids( $post_id, array $result ) {
+	private function store_result_ids( array $result, callable $store ) {
 		if ( isset( $result['id'] ) ) {
-			\update_post_meta( $post_id, self::POST_META_ID, (int) $result['id'] );
+			$store( Plugin::META_ID, (int) $result['id'] );
 		}
 		if ( isset( $result['guid'] ) ) {
-			\update_post_meta( $post_id, self::POST_META_GUID, $result['guid'] );
+			$store( Plugin::META_GUID, $result['guid'] );
 		}
 	}
 }

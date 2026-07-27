@@ -9,31 +9,19 @@
 
 namespace RSS_Chat\Tests;
 
-use WP_UnitTestCase;
 use RSS_Chat\Plugin;
 
 /**
  * Feed tests.
  */
-class Test_Feed extends WP_UnitTestCase {
+class Test_Feed extends TestCase {
 
 	/**
-	 * Set up: connect an account and swallow the publish push.
+	 * Set up: swallow the publish push.
 	 */
 	public function set_up(): void {
 		parent::set_up();
 
-		\update_option(
-			Plugin::OPTION_ACCOUNT,
-			array(
-				'email'      => 'me@example.com',
-				'code'       => 'secret-code',
-				'screenname' => 'me',
-			)
-		);
-
-		// Return a synthetic /newpost response so publishing a chat post does
-		// not error on the blocked live request.
 		\add_filter( 'pre_http_request', array( $this, 'stub_http' ), 10, 3 );
 	}
 
@@ -42,7 +30,6 @@ class Test_Feed extends WP_UnitTestCase {
 	 */
 	public function tear_down(): void {
 		\remove_filter( 'pre_http_request', array( $this, 'stub_http' ), 10 );
-		\delete_option( Plugin::OPTION_ACCOUNT );
 		parent::tear_down();
 	}
 
@@ -56,11 +43,7 @@ class Test_Feed extends WP_UnitTestCase {
 	 */
 	public function stub_http( $response, $args, $url ) {
 		if ( false !== \strpos( $url, '/newpost' ) ) {
-			return array(
-				'response' => array( 'code' => 200 ),
-				'headers'  => new \WpOrg\Requests\Utility\CaseInsensitiveDictionary( array() ),
-				'body'     => '{"id":1,"guid":"https://rss.chat/?id=1"}',
-			);
+			return $this->mock_http_response( '{"id":1,"guid":"https://rss.chat/?id=1"}' );
 		}
 		return $response;
 	}
@@ -75,29 +58,6 @@ class Test_Feed extends WP_UnitTestCase {
 		ob_start();
 		require ABSPATH . 'wp-includes/feed-rss2.php';
 		return (string) ob_get_clean();
-	}
-
-	/**
-	 * Create a published chat-format post.
-	 *
-	 * @return int Post id.
-	 */
-	private function create_chat_post() {
-		$post_id = self::factory()->post->create(
-			array(
-				'post_status'  => 'draft',
-				'post_title'   => 'Hello network',
-				'post_content' => 'This is a chat post.',
-			)
-		);
-		\set_post_format( $post_id, 'chat' );
-		\wp_update_post(
-			array(
-				'ID'          => $post_id,
-				'post_status' => 'publish',
-			)
-		);
-		return $post_id;
 	}
 
 	/**
@@ -146,7 +106,7 @@ class Test_Feed extends WP_UnitTestCase {
 	 * Without a credential, the channel identity is omitted.
 	 */
 	public function test_channel_identity_omitted_when_disconnected() {
-		\delete_option( Plugin::OPTION_ACCOUNT );
+		Plugin::clear_account();
 		$this->create_chat_post();
 
 		$feed = $this->render_feed();
