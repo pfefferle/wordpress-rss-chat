@@ -18,7 +18,7 @@ RSS Chat connects your WordPress site to the [rss.chat](https://rss.chat) networ
 * Replies to it are pulled back on a schedule and stored as **comments**.
 * A comment you write on a synced post is pushed back as an rss.chat reply.
 
-No custom post type, no new admin screen, no local copy of the network. One WordPress site = one rss.chat identity (the site owner). Sign in with a passwordless email link under **RSS Chat**. The default server is `https://rss.chat`; you can point the plugin at a self-hosted instance.
+No custom post type, no new admin screen, no local copy of the network. One WordPress site = one rss.chat identity (the site owner). Sign in with a passwordless link sent to your WordPress admin email, under **Settings → RSS Chat**. The default server is `https://rss.chat`; you can point the plugin at a self-hosted instance.
 
 This is an early draft (0.1.0).
 
@@ -26,7 +26,7 @@ This is an early draft (0.1.0).
 
 1. Upload the `rss-chat` folder to `/wp-content/plugins/`.
 2. Activate the plugin.
-3. Go to **RSS Chat**, enter your email, and open the login link rss.chat sends you.
+3. Go to **Settings → RSS Chat**, click **Send login link**, and open the link rss.chat sends to your admin email.
 4. Publish a post with the **chat** post format.
 
 == Changelog ==
