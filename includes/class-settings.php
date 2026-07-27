@@ -147,9 +147,8 @@ class Settings {
 		}
 		\check_admin_referer( 'rss_chat_send_email' );
 
-		$email = isset( $_POST['rss_chat_email'] )
-			? \sanitize_email( \wp_unslash( $_POST['rss_chat_email'] ) )
-			: '';
+		// The identity is the site's admin email; it is not user-editable.
+		$email = \sanitize_email( (string) \get_option( 'admin_email' ) );
 
 		if ( '' === $email || ! \is_email( $email ) ) {
 			$this->redirect_back( 'bad_email' );
@@ -239,21 +238,18 @@ class Settings {
 					<?php \submit_button( \__( 'Disconnect', 'rss-chat' ), 'delete', 'submit', true ); ?>
 				</form>
 			<?php else : ?>
-				<p><?php \esc_html_e( 'Sign in with your email. rss.chat sends a confirmation link; open it and you are brought back here, connected. No password needed.', 'rss-chat' ); ?></p>
+				<p>
+					<?php
+					printf(
+						/* translators: %s: the site's admin email address. */
+						\esc_html__( 'Sign in as %s (your WordPress admin email). rss.chat sends a confirmation link; open it and you are brought back here, connected. No password needed.', 'rss-chat' ),
+						'<code>' . \esc_html( (string) \get_option( 'admin_email' ) ) . '</code>'
+					);
+					?>
+				</p>
 				<form action="<?php echo \esc_url( \admin_url( 'admin-post.php' ) ); ?>" method="post">
 					<input type="hidden" name="action" value="rss_chat_send_email" />
 					<?php \wp_nonce_field( 'rss_chat_send_email' ); ?>
-					<table class="form-table" role="presentation">
-						<tr>
-							<th scope="row">
-								<label for="rss_chat_email"><?php \esc_html_e( 'Email address', 'rss-chat' ); ?></label>
-							</th>
-							<td>
-								<input name="rss_chat_email" id="rss_chat_email" type="email" class="regular-text"
-									value="<?php echo \esc_attr( \wp_get_current_user()->user_email ); ?>" />
-							</td>
-						</tr>
-					</table>
 					<?php \submit_button( \__( 'Send login link', 'rss-chat' ), 'primary', 'submit', false ); ?>
 				</form>
 			<?php endif; ?>
