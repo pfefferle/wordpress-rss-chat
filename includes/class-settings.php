@@ -137,7 +137,7 @@ class Settings {
 		\add_settings_section(
 			'rss_chat_server',
 			\__( 'Server', 'rss-chat' ),
-			'__return_false',
+			array( $this, 'render_server_section' ),
 			self::MENU_SLUG
 		);
 
@@ -149,6 +149,15 @@ class Settings {
 			'rss_chat_server',
 			array( 'label_for' => 'rss_chat_server_url' )
 		);
+	}
+
+	/**
+	 * Render the description under the Server section heading.
+	 *
+	 * @return void
+	 */
+	public function render_server_section() {
+		echo '<p>' . \esc_html__( 'Choose which rss.chat instance this site talks to. Leave the default unless you run your own server.', 'rss-chat' ) . '</p>';
 	}
 
 	/**
@@ -286,6 +295,7 @@ class Settings {
 			</form>
 
 			<h2><?php \esc_html_e( 'Account', 'rss-chat' ); ?></h2>
+			<p><?php \esc_html_e( 'Connect this site to rss.chat. Your site is one identity on the network, signed in with your WordPress admin email. No password is stored.', 'rss-chat' ); ?></p>
 			<?php if ( $connected ) : ?>
 				<p>
 					<?php
