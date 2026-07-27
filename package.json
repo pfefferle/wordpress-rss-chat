@@ -1,0 +1,16 @@
+{
+	"name": "rss-chat",
+	"description": "Publish WordPress posts to the rss.chat network using the native chat post format, and get the replies back as comments.",
+	"author": "Matthias Pfefferle",
+	"license": "GPL-2.0-or-later",
+	"private": true,
+	"scripts": {
+		"env-start": "wp-env start",
+		"env-stop": "wp-env stop",
+		"preenv-test": "wp-env start",
+		"env-test": "wp-env run tests-cli --env-cwd=\"wp-content/plugins/wordpress-rss-chat\" vendor/bin/phpunit"
+	},
+	"devDependencies": {
+		"@wordpress/env": "^11.4.0"
+	}
+}

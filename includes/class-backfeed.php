@@ -37,7 +37,8 @@ class Backfeed {
 	 * @return void
 	 */
 	public function init() {
-		\add_filter( 'cron_schedules', array( $this, 'add_interval' ) );
+		// A short interval is intentional: chat replies should arrive promptly.
+		\add_filter( 'cron_schedules', array( $this, 'add_interval' ) ); // phpcs:ignore WordPress.WP.CronInterval.CronSchedulesInterval
 		\add_action( self::HOOK, array( $this, 'run' ) );
 
 		if ( ! \wp_next_scheduled( self::HOOK ) ) {
@@ -174,13 +175,13 @@ class Backfeed {
 			: ( isset( $item['description'] ) ? \wp_strip_all_tags( $item['description'] ) : '' );
 
 		$commentdata = array(
-			'comment_post_ID'      => $post_id,
-			'comment_content'      => $body,
-			'comment_author'       => isset( $item['author'] ) ? $item['author'] : ( isset( $item['screenname'] ) ? $item['screenname'] : '' ),
-			'comment_author_url'   => isset( $item['feedLink'] ) ? $item['feedLink'] : '',
-			'comment_parent'       => $this->local_parent( $item ),
-			'comment_approved'     => 1,
-			'comment_type'         => 'comment',
+			'comment_post_ID'    => $post_id,
+			'comment_content'    => $body,
+			'comment_author'     => isset( $item['author'] ) ? $item['author'] : ( isset( $item['screenname'] ) ? $item['screenname'] : '' ),
+			'comment_author_url' => isset( $item['feedLink'] ) ? $item['feedLink'] : '',
+			'comment_parent'     => $this->local_parent( $item ),
+			'comment_approved'   => 1,
+			'comment_type'       => 'comment',
 		);
 
 		if ( isset( $item['pubDate'] ) ) {

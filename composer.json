@@ -1,0 +1,46 @@
+{
+	"name": "pfefferle/wordpress-rss-chat",
+	"description": "Publish WordPress posts to the rss.chat network using the native chat post format, and get the replies back as comments.",
+	"type": "wordpress-plugin",
+	"license": "GPL-2.0-or-later",
+	"authors": [
+		{
+			"name": "Matthias Pfefferle",
+			"homepage": "https://notiz.blog/"
+		}
+	],
+	"require": {
+		"php": ">=7.4"
+	},
+	"require-dev": {
+		"phpunit/phpunit": "^9",
+		"phpcompatibility/php-compatibility": "*",
+		"phpcompatibility/phpcompatibility-wp": "*",
+		"squizlabs/php_codesniffer": "3.*",
+		"wp-coding-standards/wpcs": "dev-develop",
+		"yoast/phpunit-polyfills": "^4.0",
+		"dealerdirect/phpcodesniffer-composer-installer": "^1.0.0",
+		"sirbrillig/phpcs-variable-analysis": "^2.11",
+		"phpcsstandards/phpcsextra": "^1.1.0"
+	},
+	"autoload": {},
+	"scripts": {
+		"test": [
+			"composer install",
+			"bin/install-wp-tests.sh rss-chat-test root rss-chat-test test-db latest true",
+			"vendor/bin/phpunit"
+		],
+		"test:wp-env": [
+			"wp-env run tests-cli --env-cwd=\"wp-content/plugins/wordpress-rss-chat\" vendor/bin/phpunit"
+		],
+		"lint": [
+			"vendor/bin/phpcs"
+		],
+		"lint:fix": [
+			"vendor/bin/phpcbf"
+		]
+	},
+	"config": {
+		"allow-plugins": true
+	}
+}

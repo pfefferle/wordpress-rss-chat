@@ -36,9 +36,9 @@ class Syndication {
 	/**
 	 * Push a chat-format post when it first becomes published.
 	 *
-	 * @param string    $new_status New status.
-	 * @param string    $old_status Old status.
-	 * @param \WP_Post  $post       The post.
+	 * @param string   $new_status New status.
+	 * @param string   $old_status Old status.
+	 * @param \WP_Post $post       The post.
 	 * @return void
 	 */
 	public function maybe_push_post( $new_status, $old_status, $post ) {
