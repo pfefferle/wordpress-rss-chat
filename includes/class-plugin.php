@@ -44,9 +44,8 @@ class Plugin {
 	 */
 	public function init() {
 		( new Settings() )->init();
-		( new REST() )->init();
-		( new Admin() )->init();
-		( new Dashboard() )->init();
+		( new Syndication() )->init();
+		( new Backfeed() )->init();
 	}
 
 	/**
@@ -99,19 +98,5 @@ class Plugin {
 	public static function server_url() {
 		$settings = self::get_settings();
 		return \untrailingslashit( $settings['server_url'] );
-	}
-
-	/**
-	 * Websocket firehose URL derived from the configured server.
-	 *
-	 * https://rss.chat -> wss://rss.chat/
-	 *
-	 * @return string
-	 */
-	public static function firehose_url() {
-		$http = self::server_url();
-		$ws   = \preg_replace( '#^https?://#', '', $http );
-		$is_secure = ( 0 === \strpos( $http, 'https://' ) );
-		return ( $is_secure ? 'wss://' : 'ws://' ) . $ws . '/';
 	}
 }

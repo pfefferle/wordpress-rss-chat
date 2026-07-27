@@ -30,18 +30,19 @@ class Settings {
 	}
 
 	/**
-	 * Add the settings submenu under the main RSS Chat menu.
+	 * Add the top-level RSS Chat settings menu.
 	 *
 	 * @return void
 	 */
 	public function register_menu() {
-		\add_submenu_page(
-			Admin::MENU_SLUG,
-			\__( 'RSS Chat Settings', 'rss-chat' ),
-			\__( 'Settings', 'rss-chat' ),
+		\add_menu_page(
+			\__( 'RSS Chat', 'rss-chat' ),
+			\__( 'RSS Chat', 'rss-chat' ),
 			'manage_options',
 			self::MENU_SLUG,
-			array( $this, 'render' )
+			array( $this, 'render' ),
+			'dashicons-format-chat',
+			76
 		);
 	}
 

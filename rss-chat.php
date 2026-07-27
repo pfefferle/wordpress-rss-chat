@@ -34,9 +34,8 @@ if ( ! defined( 'ABSPATH' ) ) {
 require_once RSS_CHAT_PATH . 'includes/class-plugin.php';
 require_once RSS_CHAT_PATH . 'includes/class-api.php';
 require_once RSS_CHAT_PATH . 'includes/class-settings.php';
-require_once RSS_CHAT_PATH . 'includes/class-rest.php';
-require_once RSS_CHAT_PATH . 'includes/class-admin.php';
-require_once RSS_CHAT_PATH . 'includes/class-dashboard.php';
+require_once RSS_CHAT_PATH . 'includes/class-syndication.php';
+require_once RSS_CHAT_PATH . 'includes/class-backfeed.php';
 
 /**
  * Boot the plugin once WordPress is ready.
@@ -45,3 +44,6 @@ function bootstrap() {
 	Plugin::instance()->init();
 }
 \add_action( 'plugins_loaded', __NAMESPACE__ . '\\bootstrap' );
+
+\register_activation_hook( __FILE__, __NAMESPACE__ . '\\Backfeed::schedule' );
+\register_deactivation_hook( __FILE__, __NAMESPACE__ . '\\Backfeed::unschedule' );

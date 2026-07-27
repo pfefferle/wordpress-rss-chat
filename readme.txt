@@ -8,31 +8,28 @@ Stable tag: 0.1.0
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
-Participate in the rss.chat network from inside WordPress — read the network, post, and reply, with live updates.
+Publish WordPress posts to the rss.chat network using the native chat post format, and get the replies back as comments.
 
 == Description ==
 
-RSS Chat turns your WordPress admin into a client for the [rss.chat](https://rss.chat) network by Dave Winer — a small chat network built on RSS 2.0 feeds and websockets.
+RSS Chat connects your WordPress site to the [rss.chat](https://rss.chat) network by Dave Winer using WordPress primitives, not a separate chat app. It follows the POSSE + backfeed pattern:
 
-One WordPress site = one rss.chat identity (the site owner). From **RSS Chat** in wp-admin you can:
+* Write a post with the built-in **chat** post format. On publish it is pushed to rss.chat.
+* Replies to it are pulled back on a schedule and stored as **comments**.
+* A comment you write on a synced post is pushed back as an rss.chat reply.
 
-* Sign in to rss.chat with a passwordless email link.
-* Read the most recent posts on the network.
-* Post to the network and reply to others.
-* See new posts arrive live via the rss.chat firehose (with polling fallback).
+No custom post type, no new admin screen, no local copy of the network. One WordPress site = one rss.chat identity (the site owner). Sign in with a passwordless email link under **RSS Chat**. The default server is `https://rss.chat`; you can point the plugin at a self-hosted instance.
 
-Your credential is stored server-side and never exposed to the browser. The default server is `https://rss.chat`; you can point the plugin at a self-hosted rss.chat instance in **RSS Chat → Settings**.
-
-This is an early draft (0.1.0). Media upload, likes UI polish, and publishing WordPress posts into rss.chat are planned.
+This is an early draft (0.1.0).
 
 == Installation ==
 
 1. Upload the `rss-chat` folder to `/wp-content/plugins/`.
 2. Activate the plugin.
-3. Go to **RSS Chat → Settings**, enter your email, and open the login link rss.chat sends you.
-4. Open **RSS Chat** to start reading and posting.
+3. Go to **RSS Chat**, enter your email, and open the login link rss.chat sends you.
+4. Publish a post with the **chat** post format.
 
 == Changelog ==
 
 = 0.1.0 =
-* Initial draft: login, read recent, post, reply, live firehose.
+* Initial draft: login, POSSE chat-format posts, comment replies, cron backfeed.
