@@ -31,6 +31,9 @@ class Settings {
 	public function init() {
 		\add_action( 'admin_menu', array( $this, 'register_menu' ) );
 		\add_action( 'admin_init', array( $this, 'register_settings' ) );
+		// On admin_init (any admin page) so it also works when rss.chat sends the
+		// owner back to a query-less URL; it self-gates on the emailconfirmed arg.
+		\add_action( 'admin_init', array( $this, 'maybe_capture_login_redirect' ) );
 		\add_action( 'admin_post_rss_chat_send_email', array( $this, 'handle_send_email' ) );
 		\add_action( 'admin_post_rss_chat_disconnect', array( $this, 'handle_disconnect' ) );
 	}
@@ -48,9 +51,6 @@ class Settings {
 			self::MENU_SLUG,
 			array( $this, 'render' )
 		);
-
-		// Capture the rss.chat login redirect only when our page loads.
-		\add_action( 'load-' . $hook, array( $this, 'maybe_capture_login_redirect' ) );
 
 		// Contextual help explaining how the plugin works.
 		\add_action( 'load-' . $hook, array( $this, 'add_help_tabs' ) );
@@ -228,7 +228,10 @@ class Settings {
 			$this->redirect_back( 'bad_email' );
 		}
 
-		$redirect = \admin_url( 'options-general.php?page=' . self::MENU_SLUG );
+		// A query-less redirect: rss.chat appends its result with "?", which
+		// would corrupt an existing query string. maybe_capture_login_redirect
+		// runs on admin_init, so any admin URL works as the landing page.
+		$redirect = \admin_url( 'options-general.php' );
 		$result   = ( new API() )->send_confirming_email( $email, $redirect );
 
 		$this->redirect_back( \is_wp_error( $result ) ? 'email_error' : 'email_sent' );
