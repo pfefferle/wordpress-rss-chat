@@ -1,0 +1,23 @@
+# Directories excluded from release archives (git archive / GitHub release)
+/.claude         export-ignore
+/.github         export-ignore
+/.wordpress-org  export-ignore
+/bin             export-ignore
+/docs            export-ignore
+/node_modules    export-ignore
+/tests           export-ignore
+/vendor          export-ignore
+
+# Files excluded from release archives
+/.gitattributes   export-ignore
+/.gitignore       export-ignore
+/.wp-env.json     export-ignore
+/composer.json    export-ignore
+/composer.lock    export-ignore
+/package.json     export-ignore
+/package-lock.json export-ignore
+/phpcs.xml        export-ignore
+/phpunit.xml.dist export-ignore
+
+# GitHub linguist attributes
+/docs/**           linguist-documentation
