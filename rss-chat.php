@@ -2,7 +2,8 @@
 /**
  * Plugin Name:       RSS Chat
  * Plugin URI:        https://github.com/pfefferle/wordpress-rss-chat
- * Description:        Participate in the rss.chat network from inside WordPress. Read the network, post, and reply, with live updates from the rss.chat firehose.
+ * Update URI:        https://github.com/pfefferle/wordpress-rss-chat
+ * Description:        Publish WordPress posts to the rss.chat network using the native chat post format, and get the replies back as comments.
  * Version:           0.1.0
  * Requires at least: 6.4
  * Requires PHP:      7.4
