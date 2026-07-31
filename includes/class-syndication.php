@@ -175,8 +175,11 @@ class Syndication {
 
 		$result = ( new API() )->new_post(
 			array(
-				'description'  => \wpautop( $comment->comment_content ),
-				'inReplyToNum' => $parent_id,
+				'description' => \wpautop( $comment->comment_content ),
+				// The server stores the parent in its "inReplyTo" field; "inReplyToNum"
+				// is only the name a reply carries when read back, and older self-hosted
+				// instances do not accept it on write. Always post as "inReplyTo".
+				'inReplyTo'   => $parent_id,
 			)
 		);
 		if ( \is_wp_error( $result ) ) {

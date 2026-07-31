@@ -31,7 +31,7 @@ class API {
 	/**
 	 * Publish a post.
 	 *
-	 * @param array $item Item payload (e.g. description, title, inReplyToNum).
+	 * @param array $item Item payload (e.g. description, title, inReplyTo).
 	 * @return array|\WP_Error
 	 */
 	public function new_post( array $item ) {
