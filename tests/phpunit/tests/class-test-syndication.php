@@ -134,7 +134,7 @@ class Test_Syndication extends TestCase {
 	}
 
 	/**
-	 * A comment on a synced post is pushed as a reply with inReplyToNum.
+	 * A comment on a synced post is pushed as a reply with inReplyTo.
 	 */
 	public function test_comment_on_synced_post_pushes_reply() {
 		$post_id = self::factory()->post->create( array( 'post_status' => 'publish' ) );
@@ -150,7 +150,7 @@ class Test_Syndication extends TestCase {
 
 		$this->assertCount( 1, $this->newposts );
 		$payload = $this->payload( $this->newposts[0] );
-		$this->assertSame( 100, (int) $payload['inReplyToNum'] );
+		$this->assertSame( 100, (int) $payload['inReplyTo'] );
 	}
 
 	/**
