@@ -71,8 +71,8 @@ class Test_Backfeed extends TestCase {
 	}
 
 	/**
-	 * The synthetic reply feed: the post, one reply, our own reply (skipped),
-	 * and a nested reply to the first reply.
+	 * The synthetic reply feed: the post, one reply, our own reply (which now
+	 * comes home too, deduped only by guid), and a nested reply to the first.
 	 *
 	 * @return array
 	 */
@@ -133,24 +133,54 @@ class Test_Backfeed extends TestCase {
 	}
 
 	/**
-	 * Replies become comments; the post itself and our own reply are skipped.
+	 * Replies become comments, including the owner's own reply written on
+	 * rss.chat; only the post itself is skipped.
 	 */
-	public function test_imports_others_replies_only() {
+	public function test_imports_all_replies_including_own() {
 		$post_id = $this->synced_post();
 
 		( new Backfeed() )->run();
 
 		$comments = $this->comments_on( $post_id );
-		$this->assertCount( 2, $comments, 'only Alice and Bob replies should import' );
+		$this->assertCount( 3, $comments, 'Alice, Bob and the owner reply should import' );
 
 		$guids = array();
 		foreach ( $comments as $comment ) {
 			$guids[] = \get_comment_meta( $comment->comment_ID, Plugin::META_GUID, true );
 		}
 		$this->assertContains( 'https://rss.chat/?id=201', $guids );
+		$this->assertContains( 'https://rss.chat/?id=202', $guids, 'own reply comes home too' );
 		$this->assertContains( 'https://rss.chat/?id=203', $guids );
-		$this->assertNotContains( 'https://rss.chat/?id=202', $guids, 'own reply skipped' );
 		$this->assertNotContains( 'https://rss.chat/?id=200', $guids, 'the post itself skipped' );
+	}
+
+	/**
+	 * A reply WordPress itself pushed is not re-imported: it already carries its
+	 * guid on a comment, so guid dedup catches it even under the owner account.
+	 */
+	public function test_own_pushed_reply_not_reimported() {
+		$post_id = $this->synced_post();
+
+		// Simulate the comment WordPress pushed for reply 202: it stored the guid.
+		$pushed = self::factory()->comment->create(
+			array(
+				'comment_post_ID'  => $post_id,
+				'comment_content'  => 'my own reply',
+				'comment_approved' => 1,
+			)
+		);
+		\update_comment_meta( $pushed, Plugin::META_GUID, 'https://rss.chat/?id=202' );
+
+		( new Backfeed() )->run();
+
+		$with_guid = \get_comments(
+			array(
+				'post_id'    => $post_id,
+				'meta_key'   => Plugin::META_GUID, // phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_key
+				'meta_value' => 'https://rss.chat/?id=202', // phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_value
+			)
+		);
+		$this->assertCount( 1, $with_guid, 'reply 202 must not be imported a second time' );
 	}
 
 	/**
@@ -203,7 +233,7 @@ class Test_Backfeed extends TestCase {
 		( new Backfeed() )->run();
 		( new Backfeed() )->run();
 
-		$this->assertCount( 2, $this->comments_on( $post_id ) );
+		$this->assertCount( 3, $this->comments_on( $post_id ) );
 	}
 
 	/**
