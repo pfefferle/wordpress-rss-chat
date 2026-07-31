@@ -97,26 +97,23 @@ class Backfeed {
 			)
 		);
 
-		$own = Plugin::get_account()['screenname'];
-
 		foreach ( $posts as $post_id ) {
 			$rss_id = (int) \get_post_meta( $post_id, Plugin::META_ID, true );
 			if ( $rss_id <= 0 ) {
 				continue;
 			}
-			$this->import_replies( $post_id, $rss_id, $own );
+			$this->import_replies( $post_id, $rss_id );
 		}
 	}
 
 	/**
 	 * Import the replies of one synced post.
 	 *
-	 * @param int    $post_id Local post id.
-	 * @param int    $rss_id  rss.chat id of the post.
-	 * @param string $own     Our own screen name, whose replies we skip.
+	 * @param int $post_id Local post id.
+	 * @param int $rss_id  rss.chat id of the post.
 	 * @return void
 	 */
-	private function import_replies( $post_id, $rss_id, $own ) {
+	private function import_replies( $post_id, $rss_id ) {
 		$items = ( new API() )->get_item_and_replies( $rss_id );
 		if ( \is_wp_error( $items ) || ! \is_array( $items ) ) {
 			return;
@@ -130,10 +127,11 @@ class Backfeed {
 			if ( isset( $item['id'] ) && (int) $item['id'] === $rss_id ) {
 				continue;
 			}
-			// Skip our own replies; they originated in WordPress.
-			if ( '' !== $own && isset( $item['screenname'] ) && $item['screenname'] === $own ) {
-				continue;
-			}
+			// The guid dedup below is the only loop guard we need: a reply that
+			// WordPress pushed already carries its guid on a comment, so it is
+			// skipped here. Replies the owner wrote directly on rss.chat, even
+			// under the same account, have a guid we have not seen, so they come
+			// home like anyone else's.
 			if ( $this->already_imported( $item['guid'] ) ) {
 				continue;
 			}
