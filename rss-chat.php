@@ -29,8 +29,11 @@ if ( ! defined( 'ABSPATH' ) ) {
 
 /**
  * Default rss.chat server, overridable in settings.
+ *
+ * The demo.rss.chat instance is the one Dave Winer opened for people to try the
+ * network and test apps against; rss.chat itself is his small private one.
  */
-\define( 'RSS_CHAT_DEFAULT_SERVER', 'https://rss.chat' );
+\define( 'RSS_CHAT_DEFAULT_SERVER', 'https://demo.rss.chat' );
 
 require_once RSS_CHAT_PATH . 'includes/class-plugin.php';
 require_once RSS_CHAT_PATH . 'includes/class-api.php';

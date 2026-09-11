@@ -32,7 +32,7 @@ Your site is one identity on the network, the site owner. You sign in once with 
 
 The plugin also decorates your RSS 2.0 feed with the rss.chat `source:` vocabulary for chat-format posts, so your feed is self-describing on the network.
 
-By default you connect to `https://rss.chat`. You can point the plugin at a self-hosted instance in the settings.
+By default you connect to `https://demo.rss.chat`, the public instance. You can point the plugin at a self-hosted one in the settings.
 
 This is an early draft (0.1.0).
 
@@ -75,7 +75,7 @@ You sign in once with a passwordless link sent to your WordPress admin email. Th
 
 ### Can I use my own rss.chat server?
 
-Yes. Change the server URL under **Settings &rarr; RSS Chat** to point at a self-hosted instance. The default is `https://rss.chat`.
+Yes. Change the server URL under **Settings &rarr; RSS Chat** to point at a self-hosted instance. The default is `https://demo.rss.chat`, the public instance. `https://rss.chat` itself is a small private one.
 
 ### How quickly do replies show up?
 
