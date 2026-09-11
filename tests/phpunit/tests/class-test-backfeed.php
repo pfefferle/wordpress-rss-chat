@@ -247,4 +247,19 @@ class Test_Backfeed extends TestCase {
 		$this->assertFalse( $this->pushed, 'imported replies must not be pushed to rss.chat' );
 		$this->assertFalse( Backfeed::$importing, 'import flag reset after run' );
 	}
+
+	/**
+	 * The rss_chat_backfeed_enabled filter turns the importer off.
+	 */
+	public function test_backfeed_enabled_filter_turns_the_importer_off() {
+		$post_id = $this->synced_post();
+
+		\add_filter( 'rss_chat_backfeed_enabled', '__return_false' );
+
+		( new Backfeed() )->run();
+
+		\remove_filter( 'rss_chat_backfeed_enabled', '__return_false' );
+
+		$this->assertCount( 0, \get_comments( array( 'post_id' => $post_id ) ) );
+	}
 }
