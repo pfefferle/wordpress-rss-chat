@@ -107,13 +107,13 @@ class Settings {
 				'content' =>
 					'<h2>' . \esc_html__( 'Signing in', 'rss-chat' ) . '</h2>' .
 					'<p>' . \esc_html__( 'Click "Send login link" to receive a confirmation link at your WordPress admin email. Open it and you are brought back here, connected. No password is stored, and the address is not editable: it is always your admin email.', 'rss-chat' ) . '</p>' .
-					'<p>' . \esc_html__( 'By default you connect to https://rss.chat. Change the server URL above to use a self-hosted instance.', 'rss-chat' ) . '</p>',
+					'<p>' . \esc_html__( 'By default you connect to https://demo.rss.chat, the public instance. Change the server URL above to use a self-hosted one.', 'rss-chat' ) . '</p>',
 			)
 		);
 
 		$screen->set_help_sidebar(
 			'<p><strong>' . \esc_html__( 'For more information:', 'rss-chat' ) . '</strong></p>' .
-			'<p><a href="' . \esc_url( 'https://rss.chat' ) . '">' . \esc_html__( 'The rss.chat network', 'rss-chat' ) . '</a></p>' .
+			'<p><a href="' . \esc_url( RSS_CHAT_DEFAULT_SERVER ) . '">' . \esc_html__( 'The rss.chat network', 'rss-chat' ) . '</a></p>' .
 			'<p><a href="' . \esc_url( 'https://github.com/scripting/rss.chat' ) . '">' . \esc_html__( 'rss.chat on GitHub', 'rss-chat' ) . '</a></p>'
 		);
 	}
@@ -172,7 +172,7 @@ class Settings {
 			\esc_attr( Plugin::OPTION_SETTINGS ),
 			\esc_attr( $settings['server_url'] )
 		);
-		echo '<p class="description">' . \esc_html__( 'The rss.chat instance to connect to. Default: https://rss.chat', 'rss-chat' ) . '</p>';
+		echo '<p class="description">' . \esc_html__( 'The rss.chat instance to connect to. Default: https://demo.rss.chat', 'rss-chat' ) . '</p>';
 	}
 
 	/**
