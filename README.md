@@ -49,6 +49,22 @@ This is an early draft (0.1.0).
 
 Only posts with the built-in **chat** post format, and only when they are first published. Pages, and posts in any other format, are never sent.
 
+Other plugins can widen or narrow that with the `rss_chat_should_syndicate` filter:
+
+```php
+// Send posts in the "note" kind, whatever post format they carry.
+add_filter(
+	'rss_chat_should_syndicate',
+	function ( $syndicate, $post ) {
+		return $syndicate || has_term( 'note', 'kind', $post );
+	},
+	10,
+	2
+);
+```
+
+The revision, post type and post status guards still apply, and a post that has already been sent is never sent twice.
+
 ### Does this store a copy of the network in WordPress?
 
 No. Only your own posts and the replies to them live in WordPress, as regular posts and comments. There is no custom post type and no local mirror of the wider network.

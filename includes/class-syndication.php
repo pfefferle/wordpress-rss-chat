@@ -98,7 +98,7 @@ class Syndication {
 	}
 
 	/**
-	 * Push a published chat-format post to rss.chat, once.
+	 * Push a published post to rss.chat, once.
 	 *
 	 * @param \WP_Post $post The post.
 	 * @return void
@@ -113,7 +113,13 @@ class Syndication {
 		if ( 'post' !== $post->post_type || 'publish' !== $post->post_status ) {
 			return;
 		}
-		if ( 'chat' !== \get_post_format( $post ) ) {
+		/**
+		 * Filters whether a post is pushed to rss.chat.
+		 *
+		 * @param bool     $syndicate Whether to push this post to rss.chat.
+		 * @param \WP_Post $post      The post.
+		 */
+		if ( ! \apply_filters( 'rss_chat_should_syndicate', 'chat' === \get_post_format( $post ), $post ) ) {
 			return;
 		}
 		if ( ! Plugin::is_connected() ) {

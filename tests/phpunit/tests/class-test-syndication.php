@@ -134,6 +134,58 @@ class Test_Syndication extends TestCase {
 	}
 
 	/**
+	 * A non-chat post opted in by the filter is pushed.
+	 */
+	public function test_filter_can_opt_in_a_non_chat_post() {
+		$opt_in = function () {
+			return true;
+		};
+		\add_filter( 'rss_chat_should_syndicate', $opt_in );
+
+		$post_id = self::factory()->post->create( array( 'post_status' => 'publish' ) );
+
+		\remove_filter( 'rss_chat_should_syndicate', $opt_in );
+
+		$this->assertCount( 1, $this->newposts );
+		$this->assertSame( 4242, (int) \get_post_meta( $post_id, Plugin::META_ID, true ) );
+	}
+
+	/**
+	 * A chat post opted out by the filter is not pushed.
+	 */
+	public function test_filter_can_opt_out_a_chat_post() {
+		$opt_out = function () {
+			return false;
+		};
+		\add_filter( 'rss_chat_should_syndicate', $opt_out );
+
+		$this->create_chat_post();
+
+		\remove_filter( 'rss_chat_should_syndicate', $opt_out );
+
+		$this->assertCount( 0, $this->newposts );
+	}
+
+	/**
+	 * The filter receives the post it is deciding about.
+	 */
+	public function test_filter_receives_the_post() {
+		$seen    = null;
+		$capture = function ( $syndicate, $post ) use ( &$seen ) {
+			$seen = $post;
+			return $syndicate;
+		};
+		\add_filter( 'rss_chat_should_syndicate', $capture, 10, 2 );
+
+		$post_id = $this->create_chat_post();
+
+		\remove_filter( 'rss_chat_should_syndicate', $capture, 10 );
+
+		$this->assertInstanceOf( \WP_Post::class, $seen );
+		$this->assertSame( $post_id, $seen->ID );
+	}
+
+	/**
 	 * A comment on a synced post is pushed as a reply with inReplyTo.
 	 */
 	public function test_comment_on_synced_post_pushes_reply() {
