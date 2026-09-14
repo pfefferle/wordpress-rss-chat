@@ -83,6 +83,10 @@ You sign in once with a passwordless link sent to your WordPress admin email. Th
 
 Yes. Change the server URL under **Settings &rarr; RSS Chat** to point at a self-hosted instance. The default is `https://demo.rss.chat`, the public instance. `https://rss.chat` itself is a small private one.
 
+### How do I know the connection still works?
+
+Once signed in, **Settings &rarr; RSS Chat** has a **Test connection** button next to Disconnect. It asks the server for your account and reports the server version and your feed URL, or the server's reason when that fails. It checks that the server is reachable and knows your account; rss.chat has no side-effect-free way to verify the stored credential itself.
+
 ### How quickly do replies show up?
 
 Replies are pulled by a background task that runs every five minutes, so they arrive shortly after they are posted, not in real time.

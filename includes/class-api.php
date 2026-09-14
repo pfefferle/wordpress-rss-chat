@@ -42,6 +42,20 @@ class API {
 	}
 
 	/**
+	 * Fetch facts about the server and, when a screenname is given, that user.
+	 *
+	 * @param string $screenname Screenname, or empty for the server facts only.
+	 * @return array|\WP_Error
+	 */
+	public function get_user_data( $screenname = '' ) {
+		$query = array();
+		if ( '' !== $screenname ) {
+			$query['screenname'] = $screenname;
+		}
+		return $this->get( '/getuserdata', $query );
+	}
+
+	/**
 	 * Whether an email already has an account on the server.
 	 *
 	 * Returns true when the check cannot be made, so a transient error does not

@@ -36,6 +36,7 @@ class Settings {
 		\add_action( 'admin_init', array( $this, 'maybe_capture_login_redirect' ) );
 		\add_action( 'admin_post_rss_chat_send_email', array( $this, 'handle_send_email' ) );
 		\add_action( 'admin_post_rss_chat_disconnect', array( $this, 'handle_disconnect' ) );
+		\add_action( 'admin_post_rss_chat_test_connection', array( $this, 'handle_test_connection' ) );
 	}
 
 	/**
@@ -261,6 +262,105 @@ class Settings {
 	}
 
 	/**
+	 * Handle the "test connection" action from admin-post.php.
+	 *
+	 * The outcome is parked in a short-lived transient so the notice can show
+	 * the server's own words rather than a fixed sentence.
+	 *
+	 * @return void
+	 */
+	public function handle_test_connection() {
+		if ( ! \current_user_can( 'manage_options' ) ) {
+			\wp_die( \esc_html__( 'You are not allowed to do this.', 'rss-chat' ) );
+		}
+		\check_admin_referer( 'rss_chat_test_connection' );
+
+		$result = $this->check_connection();
+
+		\set_transient( self::test_result_key(), $result, MINUTE_IN_SECONDS );
+		$this->redirect_back( $result['success'] ? 'test_ok' : 'test_failed' );
+	}
+
+	/**
+	 * Ask the server whether it is reachable and knows the stored account.
+	 *
+	 * This is an unauthenticated read, so it confirms the server URL and the
+	 * account, not the stored credential. rss.chat has no side-effect-free
+	 * way to verify the code itself.
+	 *
+	 * @return array{success:bool,message:string}
+	 */
+	public function check_connection() {
+		if ( ! Plugin::is_connected() ) {
+			return array(
+				'success' => false,
+				'message' => \__( 'Not connected to rss.chat. Complete the login first.', 'rss-chat' ),
+			);
+		}
+
+		$account = Plugin::get_account();
+		$result  = ( new API() )->get_user_data( $account['screenname'] );
+
+		if ( \is_wp_error( $result ) ) {
+			return array(
+				'success' => false,
+				'message' => \sprintf(
+					/* translators: 1: server URL, 2: error message. */
+					\__( 'Could not verify the connection to %1$s: %2$s', 'rss-chat' ),
+					Plugin::server_url(),
+					$result->get_error_message()
+				),
+			);
+		}
+
+		if ( ! \is_array( $result ) ) {
+			return array(
+				'success' => false,
+				'message' => \sprintf(
+					/* translators: %s: server URL. */
+					\__( '%s answered, but not with the expected data. Is this an rss.chat server?', 'rss-chat' ),
+					Plugin::server_url()
+				),
+			);
+		}
+
+		$version = isset( $result['serverVersion'] ) ? (string) $result['serverVersion'] : \__( 'unknown', 'rss-chat' );
+
+		if ( empty( $result['feedUrl'] ) ) {
+			// No screenname was known, so only the server itself could be checked.
+			return array(
+				'success' => true,
+				'message' => \sprintf(
+					/* translators: 1: server URL, 2: server version. */
+					\__( 'Reached %1$s (version %2$s). The account could not be checked because no screen name is stored; disconnect and sign in again to fix that.', 'rss-chat' ),
+					Plugin::server_url(),
+					$version
+				),
+			);
+		}
+
+		return array(
+			'success' => true,
+			'message' => \sprintf(
+				/* translators: 1: server URL, 2: server version, 3: feed URL. */
+				\__( 'Connected to %1$s (version %2$s). Your feed is at %3$s.', 'rss-chat' ),
+				Plugin::server_url(),
+				$version,
+				(string) $result['feedUrl']
+			),
+		);
+	}
+
+	/**
+	 * Transient key holding the current user's last connection check result.
+	 *
+	 * @return string
+	 */
+	private static function test_result_key() {
+		return 'rss_chat_test_' . \get_current_user_id();
+	}
+
+	/**
 	 * Redirect back to the options page with a notice code and exit.
 	 *
 	 * @param string $notice Notice slug.
@@ -322,7 +422,12 @@ class Settings {
 				<form action="<?php echo \esc_url( \admin_url( 'admin-post.php' ) ); ?>" method="post">
 					<input type="hidden" name="action" value="rss_chat_disconnect" />
 					<?php \wp_nonce_field( 'rss_chat_disconnect' ); ?>
-					<?php \submit_button( \__( 'Disconnect', 'rss-chat' ), 'delete', 'submit', true ); ?>
+					<?php \submit_button( \__( 'Disconnect', 'rss-chat' ), 'delete', 'submit', false ); ?>
+				</form>
+				<form action="<?php echo \esc_url( \admin_url( 'admin-post.php' ) ); ?>" method="post" style="display:inline-block;margin-left:0.5em;">
+					<input type="hidden" name="action" value="rss_chat_test_connection" />
+					<?php \wp_nonce_field( 'rss_chat_test_connection' ); ?>
+					<?php \submit_button( \__( 'Test connection', 'rss-chat' ), 'secondary', 'submit', false ); ?>
 				</form>
 			<?php else : ?>
 				<p>
@@ -412,6 +517,20 @@ class Settings {
 					$this->notice_link_tags()
 				)
 			);
+			return;
+		}
+
+		// The connection check carries its own wording from the server.
+		if ( 'test_ok' === $notice || 'test_failed' === $notice ) {
+			$result = \get_transient( self::test_result_key() );
+			\delete_transient( self::test_result_key() );
+			if ( \is_array( $result ) && isset( $result['success'], $result['message'] ) ) {
+				printf(
+					'<div class="notice notice-%1$s is-dismissible"><p>%2$s</p></div>',
+					$result['success'] ? 'success' : 'error',
+					\esc_html( $result['message'] )
+				);
+			}
 			return;
 		}
 
