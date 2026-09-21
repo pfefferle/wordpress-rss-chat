@@ -652,4 +652,40 @@ class Test_Syndication extends TestCase {
 		$this->assertCount( 1, $this->newposts );
 		$this->assertSame( 4242, (int) \get_post_meta( $post_id, Plugin::META_ID, true ) );
 	}
+
+	/**
+	 * A chat-format item of a custom post type saved through the REST API (the
+	 * block editor) is pushed too. The format is set before core fires
+	 * wp_after_insert_post, so the generic hook covers every post type.
+	 */
+	public function test_custom_post_type_saved_via_rest_is_pushed() {
+		\register_post_type(
+			'rssclub',
+			array(
+				'public'       => true,
+				'show_in_rest' => true,
+				'supports'     => array( 'title', 'editor', 'post-formats' ),
+			)
+		);
+		$this->enable_post_types( array( 'post', 'rssclub' ) );
+		\wp_set_current_user( self::factory()->user->create( array( 'role' => 'administrator' ) ) );
+
+		$request = new \WP_REST_Request( 'POST', '/wp/v2/rssclub' );
+		$request->set_body_params(
+			array(
+				'title'   => 'Club chat via REST',
+				'content' => 'Saved by the block editor.',
+				'status'  => 'publish',
+				'format'  => 'chat',
+			)
+		);
+		$response = \rest_get_server()->dispatch( $request );
+
+		\unregister_post_type( 'rssclub' );
+		\delete_option( Plugin::OPTION_SETTINGS );
+
+		$this->assertSame( 201, $response->get_status() );
+		$this->assertCount( 1, $this->newposts );
+		$this->assertSame( 4242, (int) \get_post_meta( $response->get_data()['id'], Plugin::META_ID, true ) );
+	}
 }
