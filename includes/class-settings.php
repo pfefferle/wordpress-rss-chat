@@ -419,7 +419,7 @@ class Settings {
 					);
 					?>
 				</p>
-				<form action="<?php echo \esc_url( \admin_url( 'admin-post.php' ) ); ?>" method="post">
+				<form action="<?php echo \esc_url( \admin_url( 'admin-post.php' ) ); ?>" method="post" style="display:inline-block;">
 					<input type="hidden" name="action" value="rss_chat_disconnect" />
 					<?php \wp_nonce_field( 'rss_chat_disconnect' ); ?>
 					<?php \submit_button( \__( 'Disconnect', 'rss-chat' ), 'delete', 'submit', false ); ?>

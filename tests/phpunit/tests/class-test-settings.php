@@ -118,6 +118,16 @@ class Test_Settings extends TestCase {
 	}
 
 	/**
+	 * Disconnect and Test connection sit side by side, so both forms are inline.
+	 */
+	public function test_page_lines_up_the_disconnect_and_test_connection_buttons() {
+		$html = $this->render_page();
+
+		$this->assertMatchesRegularExpression( '/<form[^>]*display:inline-block[^>]*>\s*<input type="hidden" name="action" value="rss_chat_disconnect"/', $html );
+		$this->assertMatchesRegularExpression( '/<form[^>]*display:inline-block[^>]*>\s*<input type="hidden" name="action" value="rss_chat_test_connection"/', $html );
+	}
+
+	/**
 	 * A disconnected site has nothing to test, so no button.
 	 */
 	public function test_page_hides_the_test_connection_button_when_disconnected() {
