@@ -173,4 +173,65 @@ class Test_Settings extends TestCase {
 
 		$this->assertFalse( $result['success'] );
 	}
+
+	/**
+	 * Render the settings page with its sections and fields registered.
+	 *
+	 * @return string
+	 */
+	private function render_page_with_fields() {
+		$settings = new Settings();
+		$settings->register_settings();
+
+		\wp_set_current_user( self::factory()->user->create( array( 'role' => 'administrator' ) ) );
+		\ob_start();
+		$settings->render();
+		return (string) \ob_get_clean();
+	}
+
+	/**
+	 * Every public post type is offered as a checkbox, and only "post" is
+	 * ticked out of the box.
+	 */
+	public function test_page_offers_public_post_types_with_post_ticked() {
+		\delete_option( Plugin::OPTION_SETTINGS );
+		\register_post_type(
+			'rssclub',
+			array(
+				'public' => true,
+				'label'  => 'RSS Club',
+			)
+		);
+
+		$html = $this->render_page_with_fields();
+
+		\unregister_post_type( 'rssclub' );
+
+		$this->assertMatchesRegularExpression( '/<input type="checkbox"[^>]*name="rss_chat_settings\[post_types\]\[\]"[^>]*value="post"[^>]*checked/', $html );
+		$this->assertMatchesRegularExpression( '/<input type="checkbox"[^>]*value="rssclub"(?![^>]*checked)[^>]*>/', $html );
+		$this->assertStringContainsString( 'RSS Club', $html );
+		$this->assertStringNotContainsString( 'value="attachment"', $html, 'media is not a thing you chat about' );
+	}
+
+	/**
+	 * A saved custom post type comes back ticked.
+	 */
+	public function test_page_ticks_the_saved_post_types() {
+		\register_post_type( 'rssclub', array( 'public' => true ) );
+		\update_option(
+			Plugin::OPTION_SETTINGS,
+			array(
+				'server_url' => RSS_CHAT_DEFAULT_SERVER,
+				'post_types' => array( 'rssclub' ),
+			)
+		);
+
+		$html = $this->render_page_with_fields();
+
+		\unregister_post_type( 'rssclub' );
+		\delete_option( Plugin::OPTION_SETTINGS );
+
+		$this->assertMatchesRegularExpression( '/<input type="checkbox"[^>]*value="rssclub"[^>]*checked/', $html );
+		$this->assertMatchesRegularExpression( '/<input type="checkbox"[^>]*value="post"(?![^>]*checked)[^>]*>/', $html );
+	}
 }

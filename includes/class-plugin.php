@@ -71,7 +71,7 @@ class Plugin {
 	/**
 	 * The Settings-API-managed settings, merged with defaults.
 	 *
-	 * @return array{server_url:string}
+	 * @return array{server_url:string,post_types:string[]}
 	 */
 	public static function get_settings() {
 		return self::get_option_array( self::OPTION_SETTINGS, self::default_settings() );
@@ -96,27 +96,62 @@ class Plugin {
 	/**
 	 * Default settings.
 	 *
-	 * @return array{server_url:string}
+	 * @return array{server_url:string,post_types:string[]}
 	 */
 	public static function default_settings() {
 		return array(
 			'server_url' => RSS_CHAT_DEFAULT_SERVER,
+			'post_types' => array( 'post' ),
 		);
+	}
+
+	/**
+	 * The post types whose chat-format posts are pushed to rss.chat.
+	 *
+	 * @return string[] Post type names.
+	 */
+	public static function supported_post_types() {
+		$settings = self::get_settings();
+		return \is_array( $settings['post_types'] ) ? \array_values( $settings['post_types'] ) : array();
+	}
+
+	/**
+	 * The post types the owner can choose from: every public type except
+	 * media, which is not something you chat about.
+	 *
+	 * @return \WP_Post_Type[] Keyed by post type name.
+	 */
+	public static function selectable_post_types() {
+		$post_types = \get_post_types( array( 'public' => true ), 'objects' );
+		unset( $post_types['attachment'] );
+		return $post_types;
 	}
 
 	/**
 	 * Sanitize callback for the settings option (register_setting).
 	 *
+	 * An empty post type list is kept as such: unticking every type is the
+	 * owner's way of pausing publishing, so it must not snap back to "post".
+	 *
 	 * @param mixed $input Raw posted value.
-	 * @return array{server_url:string}
+	 * @return array{server_url:string,post_types:string[]}
 	 */
 	public static function sanitize_settings( $input ) {
 		$input = \is_array( $input ) ? $input : array();
 
 		$url = isset( $input['server_url'] ) ? \esc_url_raw( \trim( $input['server_url'] ) ) : '';
 
+		$post_types = isset( $input['post_types'] ) && \is_array( $input['post_types'] ) ? $input['post_types'] : array();
+		$post_types = \array_values(
+			\array_intersect(
+				\array_map( 'sanitize_key', $post_types ),
+				\array_keys( self::selectable_post_types() )
+			)
+		);
+
 		return array(
 			'server_url' => '' !== $url ? $url : RSS_CHAT_DEFAULT_SERVER,
+			'post_types' => $post_types,
 		);
 	}
 

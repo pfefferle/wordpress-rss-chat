@@ -262,4 +262,25 @@ class Test_Backfeed extends TestCase {
 
 		$this->assertCount( 0, \get_comments( array( 'post_id' => $post_id ) ) );
 	}
+
+	/**
+	 * A synced item of a custom post type receives its replies, whether or not
+	 * its type is (still) enabled: the synced id is what makes it a member.
+	 */
+	public function test_replies_are_imported_for_a_synced_custom_post_type() {
+		\register_post_type( 'rssclub', array( 'public' => true ) );
+		$post_id = self::factory()->post->create(
+			array(
+				'post_type'   => 'rssclub',
+				'post_status' => 'publish',
+			)
+		);
+		\update_post_meta( $post_id, Plugin::META_ID, $this->rss_id );
+
+		( new Backfeed() )->run();
+
+		\unregister_post_type( 'rssclub' );
+
+		$this->assertCount( 3, $this->comments_on( $post_id ) );
+	}
 }
