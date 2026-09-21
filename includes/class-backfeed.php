@@ -101,9 +101,12 @@ class Backfeed {
 			return;
 		}
 
+		// Every registered type, not just the ones currently enabled for
+		// publishing: an item that is already on rss.chat keeps getting its
+		// replies even after its type is unticked. The synced id is the test.
 		$posts = \get_posts(
 			array(
-				'post_type'      => 'post',
+				'post_type'      => \array_values( \get_post_types() ),
 				'posts_per_page' => 100,
 				'fields'         => 'ids',
 				'meta_key'       => Plugin::META_ID, // phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_key

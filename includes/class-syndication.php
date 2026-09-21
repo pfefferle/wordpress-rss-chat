@@ -112,7 +112,11 @@ class Syndication {
 			return;
 		}
 
-		if ( 'post' !== $post->post_type || 'publish' !== $post->post_status ) {
+		if ( 'publish' !== $post->post_status ) {
+			return;
+		}
+
+		if ( ! \in_array( $post->post_type, Plugin::supported_post_types(), true ) ) {
 			return;
 		}
 

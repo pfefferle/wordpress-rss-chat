@@ -533,4 +533,97 @@ class Test_Syndication extends TestCase {
 		$this->assertFalse( $called );
 		$this->assertCount( 0, $this->newposts );
 	}
+
+	/**
+	 * Register a public post type with post-format support and publish a
+	 * chat-format item of it.
+	 *
+	 * @return int Post id.
+	 */
+	private function create_cpt_chat_post() {
+		\register_post_type(
+			'rssclub',
+			array(
+				'public'   => true,
+				'supports' => array( 'title', 'editor', 'post-formats' ),
+			)
+		);
+
+		$post_id = self::factory()->post->create(
+			array(
+				'post_type'    => 'rssclub',
+				'post_status'  => 'draft',
+				'post_title'   => 'Club chat',
+				'post_content' => 'A chat post from a custom type.',
+			)
+		);
+		\set_post_format( $post_id, 'chat' );
+		\wp_update_post(
+			array(
+				'ID'          => $post_id,
+				'post_status' => 'publish',
+			)
+		);
+
+		return $post_id;
+	}
+
+	/**
+	 * Enable the given post types in the plugin settings.
+	 *
+	 * @param string[] $post_types Post type names.
+	 * @return void
+	 */
+	private function enable_post_types( array $post_types ) {
+		\update_option(
+			Plugin::OPTION_SETTINGS,
+			array(
+				'server_url' => RSS_CHAT_DEFAULT_SERVER,
+				'post_types' => $post_types,
+			)
+		);
+	}
+
+	/**
+	 * A chat-format item of a custom post type is not pushed unless its type
+	 * is enabled in the settings.
+	 */
+	public function test_custom_post_type_is_not_pushed_by_default() {
+		\delete_option( Plugin::OPTION_SETTINGS );
+
+		$this->create_cpt_chat_post();
+
+		\unregister_post_type( 'rssclub' );
+
+		$this->assertCount( 0, $this->newposts );
+	}
+
+	/**
+	 * Once its type is enabled, a chat-format item of a custom post type is
+	 * pushed like a post.
+	 */
+	public function test_custom_post_type_is_pushed_when_enabled() {
+		$this->enable_post_types( array( 'post', 'rssclub' ) );
+
+		$post_id = $this->create_cpt_chat_post();
+
+		\unregister_post_type( 'rssclub' );
+		\delete_option( Plugin::OPTION_SETTINGS );
+
+		$this->assertCount( 1, $this->newposts );
+		$this->assertSame( 4242, (int) \get_post_meta( $post_id, Plugin::META_ID, true ) );
+	}
+
+	/**
+	 * Unticking "post" stops posts from being pushed, too.
+	 */
+	public function test_post_is_not_pushed_when_its_type_is_disabled() {
+		$this->enable_post_types( array() );
+
+		$this->create_chat_post();
+
+		\delete_option( Plugin::OPTION_SETTINGS );
+
+		$this->assertCount( 0, $this->newposts );
+	}
 }

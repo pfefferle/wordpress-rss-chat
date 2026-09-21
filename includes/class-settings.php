@@ -86,6 +86,7 @@ class Settings {
 				'content' =>
 					'<h2>' . \esc_html__( 'Posting to the network', 'rss-chat' ) . '</h2>' .
 					'<p>' . \esc_html__( 'Write a normal post and give it the built-in "chat" post format. When you publish it, the post is pushed to rss.chat as a new item. Posts in any other format are left alone.', 'rss-chat' ) . '</p>' .
+					'<p>' . \esc_html__( 'By default only posts are considered. Tick more post types under "Publishing" to push their chat-format items as well; the format is still what marks a single item for the network.', 'rss-chat' ) . '</p>' .
 					'<p>' . \esc_html__( 'Nothing extra is stored: the post stays a normal WordPress post, and a note of its rss.chat id is kept so replies can find their way back.', 'rss-chat' ) . '</p>',
 			)
 		);
@@ -150,6 +151,55 @@ class Settings {
 			'rss_chat_server',
 			array( 'label_for' => 'rss_chat_server_url' )
 		);
+
+		\add_settings_section(
+			'rss_chat_publishing',
+			\__( 'Publishing', 'rss-chat' ),
+			array( $this, 'render_publishing_section' ),
+			self::MENU_SLUG
+		);
+
+		\add_settings_field(
+			'rss_chat_post_types',
+			\__( 'Post types', 'rss-chat' ),
+			array( $this, 'render_post_types_field' ),
+			self::MENU_SLUG,
+			'rss_chat_publishing'
+		);
+	}
+
+	/**
+	 * Render the description under the Publishing section heading.
+	 *
+	 * @return void
+	 */
+	public function render_publishing_section() {
+		echo '<p>' . \esc_html__( 'What this site sends to the network.', 'rss-chat' ) . '</p>';
+	}
+
+	/**
+	 * Render the post type checkboxes.
+	 *
+	 * @return void
+	 */
+	public function render_post_types_field() {
+		$enabled = Plugin::supported_post_types();
+		?>
+		<fieldset>
+			<legend class="screen-reader-text"><?php \esc_html_e( 'Post types', 'rss-chat' ); ?></legend>
+			<?php \esc_html_e( 'Push items of the selected post types to rss.chat when they have the chat post format:', 'rss-chat' ); ?>
+			<ul>
+			<?php foreach ( Plugin::selectable_post_types() as $post_type ) : ?>
+				<li>
+					<label for="rss_chat_post_type_<?php echo \esc_attr( $post_type->name ); ?>">
+						<input type="checkbox" id="rss_chat_post_type_<?php echo \esc_attr( $post_type->name ); ?>" name="<?php echo \esc_attr( Plugin::OPTION_SETTINGS ); ?>[post_types][]" value="<?php echo \esc_attr( $post_type->name ); ?>" <?php \checked( \in_array( $post_type->name, $enabled, true ) ); ?> />
+						<?php echo \esc_html( $post_type->label ); ?>
+					</label>
+				</li>
+			<?php endforeach; ?>
+			</ul>
+		</fieldset>
+		<?php
 	}
 
 	/**

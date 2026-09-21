@@ -33,4 +33,61 @@ class Test_Plugin extends TestCase {
 
 		$this->assertSame( 'https://demo.rss.chat', $settings['server_url'] );
 	}
+
+	/**
+	 * Without a saved setting only the built-in post type is pushed.
+	 */
+	public function test_default_supported_post_types_is_post() {
+		\delete_option( Plugin::OPTION_SETTINGS );
+
+		$this->assertSame( array( 'post' ), Plugin::supported_post_types() );
+	}
+
+	/**
+	 * A ticked custom post type is kept, and post is not forced back in.
+	 */
+	public function test_sanitize_keeps_registered_post_types() {
+		\register_post_type( 'rssclub', array( 'public' => true ) );
+
+		$settings = Plugin::sanitize_settings( array( 'post_types' => array( 'rssclub' ) ) );
+
+		\unregister_post_type( 'rssclub' );
+
+		$this->assertSame( array( 'rssclub' ), $settings['post_types'] );
+	}
+
+	/**
+	 * Names that are not a registered post type are dropped.
+	 */
+	public function test_sanitize_drops_unknown_post_types() {
+		$settings = Plugin::sanitize_settings( array( 'post_types' => array( 'post', 'nope', 'revision' ) ) );
+
+		$this->assertSame( array( 'post' ), $settings['post_types'] );
+	}
+
+	/**
+	 * Unticking everything is a deliberate off-switch, not a fallback to post.
+	 */
+	public function test_sanitize_allows_no_post_types() {
+		$settings = Plugin::sanitize_settings( array( 'server_url' => 'https://demo.rss.chat' ) );
+
+		$this->assertSame( array(), $settings['post_types'] );
+	}
+
+	/**
+	 * A saved setting is what supported_post_types() reports.
+	 */
+	public function test_supported_post_types_reads_the_saved_setting() {
+		\update_option(
+			Plugin::OPTION_SETTINGS,
+			array(
+				'server_url' => 'https://demo.rss.chat',
+				'post_types' => array( 'post', 'page' ),
+			)
+		);
+
+		$this->assertSame( array( 'post', 'page' ), Plugin::supported_post_types() );
+
+		\delete_option( Plugin::OPTION_SETTINGS );
+	}
 }
