@@ -90,4 +90,23 @@ class Test_Plugin extends TestCase {
 
 		\delete_option( Plugin::OPTION_SETTINGS );
 	}
+
+	/**
+	 * A crafted request with nested arrays in post_types is discarded, not
+	 * fatal. (sanitize_key() returns "" for anything non-scalar.)
+	 */
+	public function test_sanitize_discards_nested_post_type_values() {
+		$settings = Plugin::sanitize_settings(
+			array(
+				'post_types' => array(
+					array( 'x' => 'post' ),
+					'post',
+					42,
+					null,
+				),
+			)
+		);
+
+		$this->assertSame( array( 'post' ), $settings['post_types'] );
+	}
 }
