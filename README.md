@@ -47,7 +47,7 @@ This is an early draft (0.1.0).
 
 ### Which posts get published?
 
-Only posts with the built-in **chat** post format, and only when they are first published. Posts in any other format are never sent.
+Only posts with the built-in **chat** post format. A post is sent the first time it is saved while published, so a post that was skipped earlier (because its type was not enabled yet, for example) goes out on its next update. Once sent, later edits stay local; rss.chat keeps the first version. Posts in any other format are never sent.
 
 Out of the box only the `post` type is considered. Under **Settings &rarr; RSS Chat &rarr; Publishing** you can tick other post types (pages, or a custom post type) so their chat-format items are pushed too. Untick everything to pause publishing. Items that are already on rss.chat keep receiving their replies whatever the setting says.
 

@@ -626,4 +626,30 @@ class Test_Syndication extends TestCase {
 
 		$this->assertCount( 0, $this->newposts );
 	}
+
+	/**
+	 * A post that was skipped at publish time (its type was not enabled yet)
+	 * goes out on its next update once the type is enabled. Nothing has to be
+	 * un- and re-published.
+	 */
+	public function test_updating_a_skipped_post_pushes_it_once_its_type_is_enabled() {
+		\delete_option( Plugin::OPTION_SETTINGS );
+
+		$post_id = $this->create_cpt_chat_post();
+		$this->assertCount( 0, $this->newposts, 'skipped while the type is off' );
+
+		$this->enable_post_types( array( 'post', 'rssclub' ) );
+		\wp_update_post(
+			array(
+				'ID'         => $post_id,
+				'post_title' => 'Club chat, edited',
+			)
+		);
+
+		\unregister_post_type( 'rssclub' );
+		\delete_option( Plugin::OPTION_SETTINGS );
+
+		$this->assertCount( 1, $this->newposts );
+		$this->assertSame( 4242, (int) \get_post_meta( $post_id, Plugin::META_ID, true ) );
+	}
 }
