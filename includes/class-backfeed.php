@@ -156,14 +156,20 @@ class Backfeed {
 		}
 
 		foreach ( $items as $item ) {
-			if ( ! \is_array( $item ) || empty( $item['guid'] ) ) {
+			if ( ! \is_array( $item ) ) {
 				continue;
 			}
 
 			// The array leads with the post itself. Its likes are the one
-			// thing we take from it; replies' likes stay on the network.
+			// thing we take from it; replies' likes stay on the network. It
+			// is never stored as a comment, so it needs no guid.
 			if ( isset( $item['id'] ) && (int) $item['id'] === $rss_id ) {
 				$this->import_likes( $post_id, $rss_id, $item );
+				continue;
+			}
+
+			// A reply is deduped by its guid, so one without is unusable.
+			if ( empty( $item['guid'] ) ) {
 				continue;
 			}
 
@@ -216,6 +222,13 @@ class Backfeed {
 			if ( \is_string( $screenname ) && '' !== $screenname ) {
 				$wanted[ $rss_id . ':' . $screenname ] = $screenname;
 			}
+		}
+
+		// The count says there are likes but none of them came back as a
+		// screenname: an unexpected shape, not an empty list. Deleting every
+		// stored like on that reading would be wrong.
+		if ( (int) $item['ctLikes'] > 0 && empty( $wanted ) ) {
+			return;
 		}
 
 		$stored = $this->stored_likes( $post_id, $rss_id );

@@ -60,6 +60,20 @@ class Test_Backfeed extends TestCase {
 	private $with_like_count = true;
 
 	/**
+	 * Raw body /getlikerslist answers with, instead of the screenname list.
+	 *
+	 * @var string|null
+	 */
+	private $likers_body = null;
+
+	/**
+	 * Whether the post item carries a guid.
+	 *
+	 * @var bool
+	 */
+	private $with_post_guid = true;
+
+	/**
 	 * Set up: stub the reply feed.
 	 */
 	public function set_up(): void {
@@ -70,6 +84,8 @@ class Test_Backfeed extends TestCase {
 		$this->likers_requests = 0;
 		$this->broken_users    = array();
 		$this->with_like_count = true;
+		$this->likers_body     = null;
+		$this->with_post_guid  = true;
 		\add_filter( 'pre_http_request', array( $this, 'stub_http' ), 10, 3 );
 	}
 
@@ -102,7 +118,9 @@ class Test_Backfeed extends TestCase {
 
 		if ( false !== \strpos( $url, '/getlikerslist' ) ) {
 			++$this->likers_requests;
-			return $this->mock_http_response( (string) \wp_json_encode( $this->likers ) );
+			return $this->mock_http_response(
+				null === $this->likers_body ? (string) \wp_json_encode( $this->likers ) : $this->likers_body
+			);
 		}
 
 		if ( false !== \strpos( $url, '/getuserdata' ) ) {
@@ -137,7 +155,7 @@ class Test_Backfeed extends TestCase {
 	private function feed( $rss_id ) {
 		$post = array(
 			'id'          => $rss_id,
-			'guid'        => 'https://rss.chat/?id=' . $rss_id,
+			'guid'        => $this->with_post_guid ? 'https://rss.chat/?id=' . $rss_id : '',
 			'screenname'  => 'me',
 			'description' => 'the post',
 		);
@@ -563,6 +581,38 @@ class Test_Backfeed extends TestCase {
 		$this->assertCount( 1, $this->likes_on( $post_id ) );
 
 		$this->with_like_count = false;
+		( new Backfeed() )->run();
+
+		$this->assertCount( 1, $this->likes_on( $post_id ) );
+	}
+
+	/**
+	 * The item says it has likes but the list cannot be read as screennames
+	 * (a wrapped or differently shaped response): that is not "nobody likes
+	 * this any more", so the stored likes stay.
+	 */
+	public function test_unusable_liker_list_does_not_wipe_stored_likes() {
+		$post_id      = $this->synced_post();
+		$this->likers = array( 'carol' );
+
+		( new Backfeed() )->run();
+		$this->assertCount( 1, $this->likes_on( $post_id ) );
+
+		$this->likers_body = '{"likers":["carol"]}';
+		( new Backfeed() )->run();
+
+		$this->assertCount( 1, $this->likes_on( $post_id ) );
+	}
+
+	/**
+	 * Likes are reconciled even when the post item carries no guid: the guid
+	 * is what dedups replies, the post itself is never stored as a comment.
+	 */
+	public function test_likes_are_imported_when_the_post_item_has_no_guid() {
+		$post_id              = $this->synced_post();
+		$this->likers         = array( 'carol' );
+		$this->with_post_guid = false;
+
 		( new Backfeed() )->run();
 
 		$this->assertCount( 1, $this->likes_on( $post_id ) );

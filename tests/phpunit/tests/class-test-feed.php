@@ -127,4 +127,35 @@ class Test_Feed extends TestCase {
 
 		$this->assertStringNotContainsString( '<source:account', $feed );
 	}
+
+	/**
+	 * The comments count the feed advertises is the number of replies, not
+	 * every comment row: likes are stored as comments too, and counting them
+	 * would tell the network about replies its reply feed does not have.
+	 */
+	public function test_comments_count_ignores_likes() {
+		$post_id = $this->create_chat_post();
+
+		self::factory()->comment->create(
+			array(
+				'comment_post_ID'  => $post_id,
+				'comment_content'  => 'a reply',
+				'comment_approved' => 1,
+			)
+		);
+		foreach ( array( 'carol', 'dave' ) as $screenname ) {
+			self::factory()->comment->create(
+				array(
+					'comment_post_ID'  => $post_id,
+					'comment_type'     => 'like',
+					'comment_author'   => $screenname,
+					'comment_approved' => 1,
+				)
+			);
+		}
+
+		$feed = $this->render_feed();
+
+		$this->assertStringContainsString( '<source:comments count="1"', $feed );
+	}
 }

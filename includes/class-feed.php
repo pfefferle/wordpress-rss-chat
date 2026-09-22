@@ -93,8 +93,27 @@ class Feed {
 
 		printf(
 			"\t\t<source:comments count=\"%1\$d\" feedUrl=\"%2\$s\"/>\n",
-			(int) \get_comments_number( $post ),
+			(int) $this->reply_count( $post ),
 			\esc_url( \get_post_comments_feed_link( $post->ID ) )
+		);
+	}
+
+	/**
+	 * How many replies the post has. Not get_comments_number(), which counts
+	 * every approved comment row: likes are stored as comments too, and the
+	 * network would read them as replies its reply feed does not contain.
+	 *
+	 * @param \WP_Post $post The post.
+	 * @return int
+	 */
+	private function reply_count( $post ) {
+		return (int) \get_comments(
+			array(
+				'post_id' => $post->ID,
+				'type'    => 'comment',
+				'status'  => 'approve',
+				'count'   => true,
+			)
 		);
 	}
 }
