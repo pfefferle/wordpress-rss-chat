@@ -46,6 +46,13 @@ class Test_Backfeed extends TestCase {
 	private $likers_requests = 0;
 
 	/**
+	 * Screennames whose /getuserdata lookup fails.
+	 *
+	 * @var string[]
+	 */
+	private $broken_users = array();
+
+	/**
 	 * Set up: stub the reply feed.
 	 */
 	public function set_up(): void {
@@ -54,6 +61,7 @@ class Test_Backfeed extends TestCase {
 		$this->pushed          = false;
 		$this->likers          = array();
 		$this->likers_requests = 0;
+		$this->broken_users    = array();
 		\add_filter( 'pre_http_request', array( $this, 'stub_http' ), 10, 3 );
 	}
 
@@ -89,6 +97,11 @@ class Test_Backfeed extends TestCase {
 		}
 
 		if ( false !== \strpos( $url, '/getuserdata' ) ) {
+			foreach ( $this->broken_users as $broken ) {
+				if ( false !== \strpos( $url, 'screenname=' . $broken ) ) {
+					return $this->mock_http_response( 'Server error', 503 );
+				}
+			}
 			$user = array( 'feedUrl' => 'https://rss.chat/users/x/rss.xml' );
 			if ( false !== \strpos( $url, 'screenname=carol' ) ) {
 				$user['feedLink'] = 'https://carol.example/';
@@ -471,5 +484,26 @@ class Test_Backfeed extends TestCase {
 
 		( new Backfeed() )->run();
 		$this->assertCount( Backfeed::LIKES_PER_RUN + 5, $this->likes_on( $post_id ) );
+	}
+
+	/**
+	 * When the liker's record cannot be read the like is not stored with a
+	 * blank author URL for good; it is skipped and comes on the next run.
+	 */
+	public function test_like_waits_for_a_successful_user_lookup() {
+		$post_id            = $this->synced_post();
+		$this->likers       = array( 'carol', 'dave' );
+		$this->broken_users = array( 'dave' );
+
+		( new Backfeed() )->run();
+
+		$likes = $this->likes_on( $post_id );
+		$this->assertCount( 1, $likes );
+		$this->assertSame( 'carol', $likes[0]->comment_author );
+
+		$this->broken_users = array();
+		( new Backfeed() )->run();
+
+		$this->assertCount( 2, $this->likes_on( $post_id ) );
 	}
 }

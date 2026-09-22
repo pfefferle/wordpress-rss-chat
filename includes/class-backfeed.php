@@ -260,11 +260,18 @@ class Backfeed {
 	 * @return void
 	 */
 	private function insert_like( $post_id, $screenname, $key ) {
+		// The record is only read this once, so a failed read must not leave
+		// the like with a blank URL for good: skip it, the next run retries.
+		$url = $this->author_url( $screenname );
+		if ( null === $url ) {
+			return;
+		}
+
 		$commentdata = array(
 			'comment_post_ID'    => $post_id,
 			'comment_content'    => '',
 			'comment_author'     => $screenname,
-			'comment_author_url' => $this->author_url( $screenname ),
+			'comment_author_url' => $url,
 			'comment_parent'     => 0,
 			'comment_approved'   => 1,
 			'comment_type'       => 'like',
@@ -288,12 +295,13 @@ class Backfeed {
 	 * there.
 	 *
 	 * @param string $screenname Screenname of the liker.
-	 * @return string URL, or empty when the lookup failed.
+	 * @return string|null URL (empty when the record has none), or null when
+	 *                     the lookup failed.
 	 */
 	private function author_url( $screenname ) {
 		$user = ( new API() )->get_user_data( $screenname );
 		if ( ! \is_array( $user ) ) {
-			return '';
+			return null;
 		}
 
 		foreach ( array( 'feedLink', 'feedUrl' ) as $field ) {
