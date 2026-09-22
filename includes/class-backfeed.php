@@ -40,6 +40,18 @@ class Backfeed {
 	const OPTION_CURSOR = 'rss_chat_backfeed_cursor';
 
 	/**
+	 * Option row holding the lease that keeps two runs apart.
+	 */
+	const OPTION_LOCK = 'rss_chat_backfeed_lock';
+
+	/**
+	 * How long a run may hold the lease before another may take it over. Long
+	 * enough for a slow run, short enough that a run killed mid-flight does
+	 * not block the next ones for long.
+	 */
+	const LOCK_TTL = 180;
+
+	/**
 	 * Like requests this run may still make.
 	 *
 	 * @var int
@@ -131,6 +143,95 @@ class Backfeed {
 			return;
 		}
 
+		/*
+		 * wp-cron can start a second run while one is still going, and two
+		 * runs walking the same posts would both find the same reply or like
+		 * missing and store it twice.
+		 */
+		if ( ! $this->lock() ) {
+			return;
+		}
+
+		try {
+			$this->import_all();
+		} finally {
+			$this->unlock();
+		}
+	}
+
+	/**
+	 * Take the lease, or report that another run holds it.
+	 *
+	 * INSERT IGNORE is what makes this atomic: the options table's unique
+	 * index on option_name decides the winner, on every install, with no
+	 * object cache required. An expired lease is taken over, so a run that
+	 * died mid-flight blocks nothing for longer than LOCK_TTL.
+	 *
+	 * @return bool Whether this run owns the lease.
+	 */
+	public function lock() {
+		global $wpdb;
+
+		$expires = \time() + self::LOCK_TTL;
+
+		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching
+		$inserted = $wpdb->query(
+			$wpdb->prepare(
+				"INSERT IGNORE INTO {$wpdb->options} (option_name, option_value, autoload) VALUES (%s, %s, %s)",
+				self::OPTION_LOCK,
+				(string) $expires,
+				'no'
+			)
+		);
+
+		if ( 1 === (int) $inserted ) {
+			\wp_cache_delete( 'notoptions', 'options' );
+			return true;
+		}
+
+		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching
+		$held = $wpdb->get_var(
+			$wpdb->prepare( "SELECT option_value FROM {$wpdb->options} WHERE option_name = %s", self::OPTION_LOCK )
+		);
+
+		if ( null !== $held && \time() < (int) $held ) {
+			return false;
+		}
+
+		/*
+		 * The lease has run out. Take it over only if nobody else did first:
+		 * the value we read is part of the condition.
+		 */
+		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching
+		$taken = $wpdb->query(
+			$wpdb->prepare(
+				"UPDATE {$wpdb->options} SET option_value = %s WHERE option_name = %s AND option_value = %s",
+				(string) $expires,
+				self::OPTION_LOCK,
+				(string) $held
+			)
+		);
+
+		\wp_cache_delete( self::OPTION_LOCK, 'options' );
+
+		return 1 === (int) $taken;
+	}
+
+	/**
+	 * Give the lease back.
+	 *
+	 * @return void
+	 */
+	public function unlock() {
+		\delete_option( self::OPTION_LOCK );
+	}
+
+	/**
+	 * Walk every synced post, while holding the lease.
+	 *
+	 * @return void
+	 */
+	private function import_all() {
 		$this->like_budget = self::LIKE_REQUESTS_PER_RUN;
 		$this->stalled_at  = 0;
 
@@ -430,12 +531,13 @@ class Backfeed {
 
 		if ( \is_wp_error( $user ) ) {
 			/*
-			 * The server answered, it just has nothing under that name: the
-			 * liker deleted their account, the like row outlived it. File the
-			 * like without a URL instead of asking again every five minutes.
-			 * A server we could not reach is asked again.
+			 * The server answers 503 for every kind of failure, so the error
+			 * alone does not say whether this user is gone or the server is
+			 * having a moment. Ask it plainly: only an account it does not
+			 * have is filed without a URL, rather than asked for again every
+			 * five minutes. Anything else waits for a better run.
 			 */
-			return 'rss_chat_server_error' === $user->get_error_code() ? '' : null;
+			return false === ( new API() )->user_exists( $screenname ) ? '' : null;
 		}
 
 		if ( ! \is_array( $user ) ) {

@@ -67,6 +67,23 @@ class API {
 	}
 
 	/**
+	 * Whether the server has an account under this screenname.
+	 *
+	 * Returns null when the question could not be answered, which is not the
+	 * same as "no": the caller decides what to do with a maybe.
+	 *
+	 * @param string $screenname Screenname.
+	 * @return bool|null
+	 */
+	public function user_exists( $screenname ) {
+		$result = $this->get( '/isuserindatabase', array( 'screenname' => $screenname ) );
+		if ( ! \is_array( $result ) || ! isset( $result['flInDatabase'] ) ) {
+			return null;
+		}
+		return (bool) $result['flInDatabase'];
+	}
+
+	/**
 	 * Whether an email already has an account on the server.
 	 *
 	 * Returns true when the check cannot be made, so a transient error does not

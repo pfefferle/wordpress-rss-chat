@@ -60,6 +60,13 @@ class Test_Backfeed extends TestCase {
 	private $users_unreachable = false;
 
 	/**
+	 * Screennames the server has no account for at all.
+	 *
+	 * @var string[]
+	 */
+	private $gone_users = array();
+
+	/**
 	 * Whether the post item carries a ctLikes field at all.
 	 *
 	 * @var bool
@@ -91,6 +98,7 @@ class Test_Backfeed extends TestCase {
 		$this->likers_requests   = 0;
 		$this->broken_users      = array();
 		$this->users_unreachable = false;
+		$this->gone_users        = array();
 		$this->with_like_count   = true;
 		$this->likers_body       = null;
 		$this->with_post_guid    = true;
@@ -136,6 +144,16 @@ class Test_Backfeed extends TestCase {
 			return $this->mock_http_response(
 				null === $this->likers_body ? (string) \wp_json_encode( $this->likers ) : $this->likers_body
 			);
+		}
+
+		if ( false !== \strpos( $url, '/isuserindatabase' ) ) {
+			$exists = true;
+			foreach ( $this->gone_users as $gone ) {
+				if ( false !== \strpos( $url, 'screenname=' . $gone ) ) {
+					$exists = false;
+				}
+			}
+			return $this->mock_http_response( (string) \wp_json_encode( array( 'flInDatabase' => $exists ) ) );
 		}
 
 		if ( false !== \strpos( $url, '/getuserdata' ) ) {
@@ -630,6 +648,7 @@ class Test_Backfeed extends TestCase {
 		$post_id            = $this->synced_post();
 		$this->likers       = array( 'ghost' );
 		$this->broken_users = array( 'ghost' );
+		$this->gone_users   = array( 'ghost' );
 
 		( new Backfeed() )->run();
 
@@ -655,6 +674,7 @@ class Test_Backfeed extends TestCase {
 		$this->assertCount( 0, $this->likes_on( $post_id ) );
 
 		$this->users_unreachable = false;
+		$this->gone_users        = array();
 		( new Backfeed() )->run();
 
 		$likes = $this->likes_on( $post_id );
@@ -687,5 +707,58 @@ class Test_Backfeed extends TestCase {
 			),
 			'replies are unaffected'
 		);
+	}
+
+	/**
+	 * The server refuses the lookup but still knows the account: that is a
+	 * passing failure, so the like waits instead of losing its URL.
+	 */
+	public function test_like_waits_when_a_known_user_cannot_be_read() {
+		$post_id            = $this->synced_post();
+		$this->likers       = array( 'carol' );
+		$this->broken_users = array( 'carol' );
+
+		( new Backfeed() )->run();
+		$this->assertCount( 0, $this->likes_on( $post_id ) );
+
+		$this->broken_users = array();
+		( new Backfeed() )->run();
+
+		$likes = $this->likes_on( $post_id );
+		$this->assertCount( 1, $likes );
+		$this->assertSame( 'https://carol.example/', $likes[0]->comment_author_url );
+	}
+
+	/**
+	 * A second run while one is already going does nothing: two overlapping
+	 * cron requests must not both insert the same reply or like.
+	 */
+	public function test_a_second_run_is_skipped_while_one_holds_the_lock() {
+		$post_id = $this->synced_post();
+
+		$held = new Backfeed();
+		$this->assertTrue( $held->lock(), 'the lock is free to start with' );
+
+		( new Backfeed() )->run();
+
+		$this->assertCount( 0, \get_comments( array( 'post_id' => $post_id ) ), 'nothing imported while locked' );
+
+		$held->unlock();
+		( new Backfeed() )->run();
+
+		$this->assertCount( 3, \get_comments( array( 'post_id' => $post_id ) ) );
+	}
+
+	/**
+	 * The lock is released when a run ends, so the next one gets it.
+	 */
+	public function test_the_lock_is_released_after_a_run() {
+		$this->synced_post();
+
+		( new Backfeed() )->run();
+
+		$backfeed = new Backfeed();
+		$this->assertTrue( $backfeed->lock(), 'free again' );
+		$backfeed->unlock();
 	}
 }
