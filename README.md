@@ -19,7 +19,7 @@ Publish WordPress posts to the rss.chat network using the native chat post forma
 It follows the POSSE + backfeed pattern:
 
 * Write a post and give it the built-in **chat** post format. When you publish it, the post is pushed to rss.chat.
-* Replies to it are pulled back on a schedule and stored as **comments** on that post, keeping the thread structure. Likes on the post come back the same way, as comments of type `like`.
+* Replies to it are pulled back on a schedule and stored as **comments** on that post, keeping the thread structure. Likes on the post come back the same way, as comments of type `like`, on sites that have a plugin which shows them.
 * A comment you write on one of your synced posts is pushed back to rss.chat as a reply.
 
 Your site is one identity on the network, the site owner. You sign in once with a passwordless link sent to your WordPress admin email; no password is stored. Posts in any other format, and pages, are left alone, so the chat format is your explicit opt-in per post.
@@ -27,8 +27,9 @@ Your site is one identity on the network, the site owner. You sign in once with 
 ### How it works
 
 1. Publishing a chat-format post sends it to rss.chat and remembers its id, so replies can find their way home.
-2. Every few minutes a background task checks your pushed posts for new replies and stores them as comments. Likes on the post are stored as comments of type `like` (the ActivityPub plugin's convention, so a theme that shows those shows these too), one per liker; a like taken back on rss.chat is removed again. Imported comments are marked with a `protocol` meta of `rss.chat`, the same convention the ActivityPub plugin uses, and are never sent back out.
-3. Replies you write from WordPress travel the other way: a comment on a synced post becomes a reply on rss.chat.
+2. Every few minutes a background task checks your pushed posts for new replies and stores them as comments. Likes on the post are stored as comments of type `like`, one per liker, and a like taken back on rss.chat is removed again. Imported comments are marked with a `protocol` meta of `rss.chat`, the same convention the ActivityPub plugin uses, and are never sent back out.
+3. A like carries no text, so on its own it would show up as an empty comment. Likes are therefore only imported when the ActivityPub, Webmention or ATmosphere plugin is active: those store and render that comment type well. Without one of them the likes stay on rss.chat, and `rss_chat_import_likes` overrides the decision either way.
+4. Replies you write from WordPress travel the other way: a comment on a synced post becomes a reply on rss.chat.
 
 The plugin also decorates your RSS 2.0 feed with the rss.chat `source:` vocabulary for chat-format posts, so your feed is self-describing on the network.
 
@@ -72,6 +73,7 @@ Three more hooks round out the surface:
 - `rss_chat_post_item` filters the item payload before it goes to `/newpost`. The payload now carries the post's canonical permalink as `link`, which servers store and feed out — it's what lets a reply on the network point back at the WordPress post.
 - `rss_chat_should_push_comment` filters whether a comment is pushed as a reply. Only comments written by a logged-in user of the site are pushed at all. Comments that arrived from another network (a Webmention, an ActivityPub reply, a pingback: anything with a non-comment type or a `protocol` meta value) and comments from the public form without a user never leave the site, so bridged networks can't echo the same event back and forth and nothing goes out under the site owner's name that they didn't write. A reply to a comment that was not pushed stays home too. The filter runs last, so it only sees comments that would otherwise go out.
 - `rss_chat_backfeed_enabled` switches the reply importer off, for sites that receive replies another way and must not store them twice.
+- `rss_chat_import_likes` decides whether likes are imported as `like` comments. It defaults to whether a plugin that renders them is active, and a theme that handles the type itself can switch it on regardless.
 
 ### Does this store a copy of the network in WordPress?
 

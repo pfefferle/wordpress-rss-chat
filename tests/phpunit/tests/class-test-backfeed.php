@@ -95,6 +95,10 @@ class Test_Backfeed extends TestCase {
 		$this->likers_body       = null;
 		$this->with_post_guid    = true;
 		\add_filter( 'pre_http_request', array( $this, 'stub_http' ), 10, 3 );
+
+		// Likes are only imported when a plugin that renders them is active;
+		// the suite switches that on and the gate has its own test.
+		\add_filter( 'rss_chat_import_likes', '__return_true' );
 	}
 
 	/**
@@ -102,6 +106,7 @@ class Test_Backfeed extends TestCase {
 	 */
 	public function tear_down(): void {
 		\remove_filter( 'pre_http_request', array( $this, 'stub_http' ), 10 );
+		\remove_filter( 'rss_chat_import_likes', '__return_true' );
 		parent::tear_down();
 	}
 
@@ -650,5 +655,32 @@ class Test_Backfeed extends TestCase {
 		$likes = $this->likes_on( $post_id );
 		$this->assertCount( 1, $likes );
 		$this->assertSame( 'https://carol.example/', $likes[0]->comment_author_url );
+	}
+
+	/**
+	 * Without a plugin that renders like comments the likes stay on the
+	 * network: they would only show up as empty comments here. The replies
+	 * come home as ever.
+	 */
+	public function test_likes_stay_on_the_network_without_a_plugin_that_shows_them() {
+		\remove_filter( 'rss_chat_import_likes', '__return_true' );
+
+		$post_id      = $this->synced_post();
+		$this->likers = array( 'carol' );
+
+		( new Backfeed() )->run();
+
+		$this->assertCount( 0, $this->likes_on( $post_id ) );
+		$this->assertSame( 0, $this->likers_requests, 'the liker list is not even read' );
+		$this->assertCount(
+			3,
+			\get_comments(
+				array(
+					'post_id' => $post_id,
+					'type'    => 'comment',
+				)
+			),
+			'replies are unaffected'
+		);
 	}
 }

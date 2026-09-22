@@ -232,6 +232,8 @@ class Backfeed {
 	 * Bring the post's likes in line with rss.chat: new likes become comments
 	 * of type "like", likes taken back (togglelike) are deleted again.
 	 *
+	 * Runs only when a plugin that renders like comments is active.
+	 *
 	 * Likes have no guid, so each one is keyed by item id plus screenname.
 	 * The list is only fetched when the item reports likes; at a count of
 	 * zero everything stored for the item goes.
@@ -242,6 +244,12 @@ class Backfeed {
 	 * @return void
 	 */
 	private function import_likes( $post_id, $rss_id, array $item ) {
+		// Nothing here renders a like: leave them on the network rather than
+		// filling the comment list with empty comments.
+		if ( ! Plugin::should_import_likes() ) {
+			return;
+		}
+
 		// No count at all (an older server, a partial item) is not zero:
 		// there is nothing to reconcile against, so leave things as they are.
 		if ( ! isset( $item['ctLikes'] ) ) {

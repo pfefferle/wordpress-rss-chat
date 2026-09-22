@@ -109,4 +109,25 @@ class Test_Plugin extends TestCase {
 
 		$this->assertSame( array( 'post' ), $settings['post_types'] );
 	}
+
+	/**
+	 * Likes are imported only when a plugin that renders like comments is
+	 * active. None is, in the test suite.
+	 */
+	public function test_likes_are_not_imported_by_default() {
+		$this->assertFalse( Plugin::should_import_likes() );
+	}
+
+	/**
+	 * The rss_chat_import_likes filter switches the import on.
+	 */
+	public function test_import_likes_filter_switches_it_on() {
+		\add_filter( 'rss_chat_import_likes', '__return_true' );
+
+		$supported = Plugin::should_import_likes();
+
+		\remove_filter( 'rss_chat_import_likes', '__return_true' );
+
+		$this->assertTrue( $supported );
+	}
 }
