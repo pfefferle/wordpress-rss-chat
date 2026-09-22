@@ -46,6 +46,13 @@ class Test_Backfeed extends TestCase {
 	private $likers_requests = 0;
 
 	/**
+	 * How often /getuserdata was requested.
+	 *
+	 * @var int
+	 */
+	private $user_requests = 0;
+
+	/**
 	 * Set up: stub the reply feed.
 	 */
 	public function set_up(): void {
@@ -54,6 +61,7 @@ class Test_Backfeed extends TestCase {
 		$this->pushed          = false;
 		$this->likers          = array();
 		$this->likers_requests = 0;
+		$this->user_requests   = 0;
 		\add_filter( 'pre_http_request', array( $this, 'stub_http' ), 10, 3 );
 	}
 
@@ -89,6 +97,7 @@ class Test_Backfeed extends TestCase {
 		}
 
 		if ( false !== \strpos( $url, '/getuserdata' ) ) {
+			++$this->user_requests;
 			$user = array( 'feedUrl' => 'https://rss.chat/users/x/rss.xml' );
 			if ( false !== \strpos( $url, 'screenname=carol' ) ) {
 				$user['feedLink'] = 'https://carol.example/';
@@ -453,5 +462,44 @@ class Test_Backfeed extends TestCase {
 		$likes = $this->likes_on( $post_id );
 		$this->assertCount( 1, $likes );
 		$this->assertSame( 'https://rss.chat/users/x/rss.xml', $likes[0]->comment_author_url );
+	}
+
+	/**
+	 * A liker's user record is fetched once and cached: importing the same
+	 * screenname again does not ask rss.chat again.
+	 */
+	public function test_user_lookup_is_cached() {
+		$post_id      = $this->synced_post();
+		$this->likers = array( 'carol' );
+
+		( new Backfeed() )->run();
+		$this->assertSame( 1, $this->user_requests );
+
+		// Drop the stored like so the next run imports carol again.
+		foreach ( $this->likes_on( $post_id ) as $like ) {
+			\wp_delete_comment( $like->comment_ID, true );
+		}
+		( new Backfeed() )->run();
+
+		$this->assertCount( 1, $this->likes_on( $post_id ) );
+		$this->assertSame( 1, $this->user_requests, 'second import served from cache' );
+	}
+
+	/**
+	 * A post with many likes is not synced in one go: each run stores at most
+	 * LIKES_PER_RUN new likes, so a cron run stays bounded, and the rest
+	 * follow on the next run.
+	 */
+	public function test_new_likes_are_capped_per_run() {
+		$post_id = $this->synced_post();
+		for ( $i = 1; $i <= Backfeed::LIKES_PER_RUN + 5; $i++ ) {
+			$this->likers[] = 'user' . $i;
+		}
+
+		( new Backfeed() )->run();
+		$this->assertCount( Backfeed::LIKES_PER_RUN, $this->likes_on( $post_id ) );
+
+		( new Backfeed() )->run();
+		$this->assertCount( Backfeed::LIKES_PER_RUN + 5, $this->likes_on( $post_id ) );
 	}
 }

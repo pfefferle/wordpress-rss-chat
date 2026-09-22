@@ -26,6 +26,14 @@ class Backfeed {
 	const INTERVAL = 'rss_chat_interval';
 
 	/**
+	 * How many new likes one run stores per post. Each new liker costs one
+	 * /getuserdata request, so this keeps a cron run bounded when a post
+	 * with many likes is synced for the first time; the rest follow on the
+	 * next run.
+	 */
+	const LIKES_PER_RUN = 20;
+
+	/**
 	 * True while this class is inserting comments, so Syndication does not
 	 * push imported replies straight back to rss.chat.
 	 *
@@ -201,7 +209,8 @@ class Backfeed {
 			\wp_delete_comment( $comment_id, true );
 		}
 
-		foreach ( \array_diff_key( $wanted, $stored ) as $key => $screenname ) {
+		$missing = \array_slice( \array_diff_key( $wanted, $stored ), 0, self::LIKES_PER_RUN, true );
+		foreach ( $missing as $key => $screenname ) {
 			$this->insert_like( $post_id, $screenname, $key );
 		}
 	}
@@ -251,24 +260,11 @@ class Backfeed {
 	 * @return void
 	 */
 	private function insert_like( $post_id, $screenname, $key ) {
-		// The liker's home link when they set one, else their rss.chat feed:
-		// that is their identity on the network, and it is always there.
-		$user = ( new API() )->get_user_data( $screenname );
-		$url  = '';
-		if ( \is_array( $user ) ) {
-			foreach ( array( 'feedLink', 'feedUrl' ) as $field ) {
-				if ( ! empty( $user[ $field ] ) && \is_string( $user[ $field ] ) ) {
-					$url = $user[ $field ];
-					break;
-				}
-			}
-		}
-
 		$commentdata = array(
 			'comment_post_ID'    => $post_id,
 			'comment_content'    => '',
 			'comment_author'     => $screenname,
-			'comment_author_url' => $url,
+			'comment_author_url' => $this->author_url( $screenname ),
 			'comment_parent'     => 0,
 			'comment_approved'   => 1,
 			'comment_type'       => 'like',
@@ -284,6 +280,41 @@ class Backfeed {
 
 		\update_comment_meta( $comment_id, Plugin::META_PROTOCOL, Plugin::PROTOCOL );
 		\update_comment_meta( $comment_id, Plugin::META_LIKE, $key );
+	}
+
+	/**
+	 * The URL to file a liker under: their home link when they set one, else
+	 * their rss.chat feed, which is their identity on the network and always
+	 * there. Cached per screenname for a day, so the same person liking
+	 * several posts costs one request, not one per post.
+	 *
+	 * @param string $screenname Screenname of the liker.
+	 * @return string URL, or empty when the lookup failed.
+	 */
+	private function author_url( $screenname ) {
+		$cache_key = 'rss_chat_user_url_' . \md5( $screenname );
+		$cached    = \get_transient( $cache_key );
+		if ( \is_string( $cached ) ) {
+			return $cached;
+		}
+
+		$user = ( new API() )->get_user_data( $screenname );
+		if ( ! \is_array( $user ) ) {
+			// A failed lookup is not cached; the next run tries again.
+			return '';
+		}
+
+		$url = '';
+		foreach ( array( 'feedLink', 'feedUrl' ) as $field ) {
+			if ( ! empty( $user[ $field ] ) && \is_string( $user[ $field ] ) ) {
+				$url = $user[ $field ];
+				break;
+			}
+		}
+
+		\set_transient( $cache_key, $url, DAY_IN_SECONDS );
+
+		return $url;
 	}
 
 	/**
