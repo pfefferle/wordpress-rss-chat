@@ -27,8 +27,9 @@ class Backfeed {
 
 	/**
 	 * How many requests one run spends on likes, across all posts: reading a
-	 * post's liker list costs one, storing a new liker one more. That keeps a
-	 * cron run bounded when posts with many likes are synced for the first
+	 * post's liker list costs one, storing a new liker one more, and asking
+	 * after a liker the server would not hand over one more again. That keeps
+	 * a cron run bounded when posts with many likes are synced for the first
 	 * time; the rest follow on the next run.
 	 */
 	const LIKE_REQUESTS_PER_RUN = 20;
@@ -45,11 +46,18 @@ class Backfeed {
 	const OPTION_LOCK = 'rss_chat_backfeed_lock';
 
 	/**
-	 * How long a run may hold the lease before another may take it over. Long
-	 * enough for a slow run, short enough that a run killed mid-flight does
-	 * not block the next ones for long.
+	 * How long a run may hold the lease before another may take it over.
+	 * Longer than the cron interval and than a slow run over a hundred posts,
+	 * so a lease is only ever taken over from a run that really died.
 	 */
-	const LOCK_TTL = 180;
+	const LOCK_TTL = 600;
+
+	/**
+	 * The lease this run holds, empty when it holds none.
+	 *
+	 * @var string
+	 */
+	private $lease = '';
 
 	/**
 	 * Like requests this run may still make.
@@ -172,20 +180,9 @@ class Backfeed {
 	public function lock() {
 		global $wpdb;
 
-		$expires = \time() + self::LOCK_TTL;
+		$lease = \wp_generate_uuid4() . '|' . ( \time() + self::LOCK_TTL );
 
-		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching
-		$inserted = $wpdb->query(
-			$wpdb->prepare(
-				"INSERT IGNORE INTO {$wpdb->options} (option_name, option_value, autoload) VALUES (%s, %s, %s)",
-				self::OPTION_LOCK,
-				(string) $expires,
-				'no'
-			)
-		);
-
-		if ( 1 === (int) $inserted ) {
-			\wp_cache_delete( 'notoptions', 'options' );
+		if ( $this->insert_lease( $lease ) ) {
 			return true;
 		}
 
@@ -194,7 +191,16 @@ class Backfeed {
 			$wpdb->prepare( "SELECT option_value FROM {$wpdb->options} WHERE option_name = %s", self::OPTION_LOCK )
 		);
 
-		if ( null !== $held && \time() < (int) $held ) {
+		/*
+		 * No row, so the insert failed on something other than the lease
+		 * already being there, or it was given back in between. Try once
+		 * more rather than leaving the importer stopped.
+		 */
+		if ( null === $held ) {
+			return $this->insert_lease( $lease );
+		}
+
+		if ( \time() < (int) \substr( (string) $held, \strpos( (string) $held, '|' ) + 1 ) ) {
 			return false;
 		}
 
@@ -206,15 +212,66 @@ class Backfeed {
 		$taken = $wpdb->query(
 			$wpdb->prepare(
 				"UPDATE {$wpdb->options} SET option_value = %s WHERE option_name = %s AND option_value = %s",
-				(string) $expires,
+				$lease,
 				self::OPTION_LOCK,
 				(string) $held
 			)
 		);
 
-		\wp_cache_delete( self::OPTION_LOCK, 'options' );
+		$this->forget_cached_lease();
 
-		return 1 === (int) $taken;
+		if ( 1 !== (int) $taken ) {
+			return false;
+		}
+
+		$this->lease = $lease;
+
+		return true;
+	}
+
+	/**
+	 * Write the lease, unless one is already there.
+	 *
+	 * INSERT IGNORE is what makes this atomic: the options table's unique
+	 * index on option_name decides the winner, on every install, with no
+	 * object cache required.
+	 *
+	 * @param string $lease The lease to write.
+	 * @return bool Whether this run wrote it.
+	 */
+	private function insert_lease( $lease ) {
+		global $wpdb;
+
+		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching
+		$inserted = $wpdb->query(
+			$wpdb->prepare(
+				"INSERT IGNORE INTO {$wpdb->options} (option_name, option_value, autoload) VALUES (%s, %s, %s)",
+				self::OPTION_LOCK,
+				$lease,
+				'no'
+			)
+		);
+
+		$this->forget_cached_lease();
+
+		if ( 1 !== (int) $inserted ) {
+			return false;
+		}
+
+		$this->lease = $lease;
+
+		return true;
+	}
+
+	/**
+	 * Drop what the object cache remembers about the lease row, which is
+	 * written and read behind the options API.
+	 *
+	 * @return void
+	 */
+	private function forget_cached_lease() {
+		\wp_cache_delete( self::OPTION_LOCK, 'options' );
+		\wp_cache_delete( 'notoptions', 'options' );
 	}
 
 	/**
@@ -223,7 +280,28 @@ class Backfeed {
 	 * @return void
 	 */
 	public function unlock() {
-		\delete_option( self::OPTION_LOCK );
+		global $wpdb;
+
+		if ( '' === $this->lease ) {
+			return;
+		}
+
+		/*
+		 * Only ours. A run that overran its lease, and lost it to the run
+		 * after it, must not take that one's lease away on its way out.
+		 */
+		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching
+		$wpdb->query(
+			$wpdb->prepare(
+				"DELETE FROM {$wpdb->options} WHERE option_name = %s AND option_value = %s",
+				self::OPTION_LOCK,
+				$this->lease
+			)
+		);
+
+		$this->lease = '';
+
+		$this->forget_cached_lease();
 	}
 
 	/**
@@ -423,6 +501,16 @@ class Backfeed {
 		}
 
 		foreach ( $missing as $key => $screenname ) {
+			/*
+			 * Checked as we go, not only up front: a liker the server will
+			 * not hand over costs a second request, so the slice above is
+			 * the most we could do, not what we can still afford.
+			 */
+			if ( $this->like_budget <= 0 ) {
+				$this->stall_at( $post_id );
+				break;
+			}
+
 			--$this->like_budget;
 			$this->insert_like( $post_id, $screenname, $key );
 		}
@@ -537,6 +625,8 @@ class Backfeed {
 			 * have is filed without a URL, rather than asked for again every
 			 * five minutes. Anything else waits for a better run.
 			 */
+			--$this->like_budget;
+
 			return false === ( new API() )->user_exists( $screenname ) ? '' : null;
 		}
 

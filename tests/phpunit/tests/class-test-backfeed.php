@@ -761,4 +761,58 @@ class Test_Backfeed extends TestCase {
 		$this->assertTrue( $backfeed->lock(), 'free again' );
 		$backfeed->unlock();
 	}
+
+	/**
+	 * A run that overran its lease, and lost it to the next run, must not
+	 * take that run's lease away when it finally finishes.
+	 */
+	public function test_unlock_leaves_another_runs_lease_alone() {
+		$slow = new Backfeed();
+		$this->assertTrue( $slow->lock() );
+
+		/* The next run took the lease over after this one overran. */
+		\update_option( Backfeed::OPTION_LOCK, 'another-run|' . ( \time() + 600 ) );
+
+		$slow->unlock();
+
+		$this->assertSame( 'another-run|' . ( \time() + 600 ), \get_option( Backfeed::OPTION_LOCK ) );
+
+		\delete_option( Backfeed::OPTION_LOCK );
+	}
+
+	/**
+	 * A lease nobody gave back, because the run died, is taken over once it
+	 * has run out, so the importer does not stop for good.
+	 */
+	public function test_an_expired_lease_is_taken_over() {
+		\update_option( Backfeed::OPTION_LOCK, 'dead-run|' . ( \time() - 1 ) );
+
+		$backfeed = new Backfeed();
+
+		$this->assertTrue( $backfeed->lock(), 'an expired lease is free' );
+
+		$backfeed->unlock();
+	}
+
+	/**
+	 * Asking whether a liker still exists is a request like any other, so it
+	 * comes out of the run's budget.
+	 */
+	public function test_the_existence_check_is_charged_to_the_budget() {
+		$post_id            = $this->synced_post();
+		$this->broken_users = array();
+		for ( $i = 1; $i <= Backfeed::LIKE_REQUESTS_PER_RUN; $i++ ) {
+			$this->likers[]       = 'user' . $i;
+			$this->broken_users[] = 'user' . $i;
+			$this->gone_users[]   = 'user' . $i;
+		}
+
+		( new Backfeed() )->run();
+
+		/*
+		 * One request read the list; each of these likers then costs a lookup
+		 * plus the existence check, so half of the rest get through.
+		 */
+		$this->assertCount( (int) \ceil( ( Backfeed::LIKE_REQUESTS_PER_RUN - 1 ) / 2 ), $this->likes_on( $post_id ) );
+	}
 }
