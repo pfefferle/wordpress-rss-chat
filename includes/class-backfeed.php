@@ -585,7 +585,7 @@ class Backfeed {
 
 		$commentdata = array(
 			'comment_post_ID'    => $post_id,
-			'comment_content'    => '',
+			'comment_content'    => self::like_content(),
 			'comment_author'     => $screenname,
 			'comment_author_url' => $url,
 			'comment_parent'     => 0,
@@ -603,6 +603,18 @@ class Backfeed {
 
 		\update_comment_meta( $comment_id, Plugin::META_PROTOCOL, Plugin::PROTOCOL );
 		\update_comment_meta( $comment_id, Plugin::META_LIKE, $key );
+	}
+
+	/**
+	 * The text a like is stored with. A like says nothing, so without a text
+	 * it would be an empty comment. This is the wording the ActivityPub and
+	 * ATmosphere plugins store for their own likes, and one of them is what
+	 * renders these, so a reader sees one sentence and not two.
+	 *
+	 * @return string
+	 */
+	private static function like_content() {
+		return \html_entity_decode( \__( '&hellip; liked this!', 'rss-chat' ) );
 	}
 
 	/**
