@@ -285,36 +285,24 @@ class Backfeed {
 	/**
 	 * The URL to file a liker under: their home link when they set one, else
 	 * their rss.chat feed, which is their identity on the network and always
-	 * there. Cached per screenname for a day, so the same person liking
-	 * several posts costs one request, not one per post.
+	 * there.
 	 *
 	 * @param string $screenname Screenname of the liker.
 	 * @return string URL, or empty when the lookup failed.
 	 */
 	private function author_url( $screenname ) {
-		$cache_key = 'rss_chat_user_url_' . \md5( $screenname );
-		$cached    = \get_transient( $cache_key );
-		if ( \is_string( $cached ) ) {
-			return $cached;
-		}
-
 		$user = ( new API() )->get_user_data( $screenname );
 		if ( ! \is_array( $user ) ) {
-			// A failed lookup is not cached; the next run tries again.
 			return '';
 		}
 
-		$url = '';
 		foreach ( array( 'feedLink', 'feedUrl' ) as $field ) {
 			if ( ! empty( $user[ $field ] ) && \is_string( $user[ $field ] ) ) {
-				$url = $user[ $field ];
-				break;
+				return $user[ $field ];
 			}
 		}
 
-		\set_transient( $cache_key, $url, DAY_IN_SECONDS );
-
-		return $url;
+		return '';
 	}
 
 	/**
