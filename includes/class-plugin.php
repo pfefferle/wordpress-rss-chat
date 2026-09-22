@@ -32,10 +32,26 @@ class Plugin {
 	const META_PROTOCOL = 'protocol';
 
 	/**
+	 * Comment meta on an imported like: "<rss.chat item id>:<screenname>".
+	 * Likes carry no guid on rss.chat, so this pair is what makes one unique.
+	 */
+	const META_LIKE = '_rss_chat_like';
+
+	/**
 	 * Value stored in the shared `protocol` comment meta to mark a comment as
 	 * originating from rss.chat (mirrors the ActivityPub plugin's convention).
 	 */
 	const PROTOCOL = 'rss.chat';
+
+	/**
+	 * Plugins that render `like` comments, rather than showing them as empty
+	 * ones: the version constant each of them defines.
+	 */
+	const LIKE_AWARE_PLUGINS = array(
+		'ACTIVITYPUB_PLUGIN_VERSION',
+		'WEBMENTION_VERSION',
+		'ATMOSPHERE_VERSION',
+	);
 
 	/**
 	 * Singleton instance.
@@ -43,6 +59,34 @@ class Plugin {
 	 * @var Plugin|null
 	 */
 	private static $instance = null;
+
+	/**
+	 * Whether likes are imported as comments.
+	 *
+	 * A like has no text, so on its own it shows up as an empty comment. The
+	 * ActivityPub, Webmention and ATmosphere plugins already store and render
+	 * that comment type well, so likes are imported when one of them is
+	 * active and left on the network otherwise.
+	 *
+	 * @return bool
+	 */
+	public static function should_import_likes() {
+		$supported = false;
+
+		foreach ( self::LIKE_AWARE_PLUGINS as $constant ) {
+			if ( \defined( $constant ) ) {
+				$supported = true;
+				break;
+			}
+		}
+
+		/**
+		 * Filters whether rss.chat likes are imported as comments.
+		 *
+		 * @param bool $supported Whether to import likes.
+		 */
+		return (bool) \apply_filters( 'rss_chat_import_likes', $supported );
+	}
 
 	/**
 	 * Get the shared instance.

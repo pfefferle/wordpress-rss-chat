@@ -32,13 +32,83 @@ class Test_Backfeed extends TestCase {
 	private $rss_id = 200;
 
 	/**
+	 * Screennames /getlikerslist answers with for the post under test.
+	 *
+	 * @var string[]
+	 */
+	private $likers = array();
+
+	/**
+	 * How often /getlikerslist was requested.
+	 *
+	 * @var int
+	 */
+	private $likers_requests = 0;
+
+	/**
+	 * Screennames whose /getuserdata lookup fails.
+	 *
+	 * @var string[]
+	 */
+	private $broken_users = array();
+
+	/**
+	 * Whether /getuserdata cannot be reached at all (a transport error).
+	 *
+	 * @var bool
+	 */
+	private $users_unreachable = false;
+
+	/**
+	 * Screennames the server has no account for at all.
+	 *
+	 * @var string[]
+	 */
+	private $gone_users = array();
+
+	/**
+	 * Whether the post item carries a ctLikes field at all.
+	 *
+	 * @var bool
+	 */
+	private $with_like_count = true;
+
+	/**
+	 * Raw body /getlikerslist answers with, instead of the screenname list.
+	 *
+	 * @var string|null
+	 */
+	private $likers_body = null;
+
+	/**
+	 * Whether the post item carries a guid.
+	 *
+	 * @var bool
+	 */
+	private $with_post_guid = true;
+
+	/**
 	 * Set up: stub the reply feed.
 	 */
 	public function set_up(): void {
 		parent::set_up();
 
-		$this->pushed = false;
+		$this->pushed            = false;
+		$this->likers            = array();
+		$this->likers_requests   = 0;
+		$this->broken_users      = array();
+		$this->users_unreachable = false;
+		$this->gone_users        = array();
+		$this->with_like_count   = true;
+		$this->likers_body       = null;
+		$this->with_post_guid    = true;
 		\add_filter( 'pre_http_request', array( $this, 'stub_http' ), 10, 3 );
+
+		/*
+		 * Likes are only imported when a plugin that renders them is active;
+		 * the suite switches that on and the gate has its own test.
+		 */
+		\add_filter( 'rss_chat_import_likes', '__return_true' );
 	}
 
 	/**
@@ -46,6 +116,7 @@ class Test_Backfeed extends TestCase {
 	 */
 	public function tear_down(): void {
 		\remove_filter( 'pre_http_request', array( $this, 'stub_http' ), 10 );
+		\remove_filter( 'rss_chat_import_likes', '__return_true' );
 		parent::tear_down();
 	}
 
@@ -64,7 +135,53 @@ class Test_Backfeed extends TestCase {
 		}
 
 		if ( false !== \strpos( $url, '/getitemandreplies' ) ) {
-			return $this->mock_http_response( (string) \wp_json_encode( $this->feed() ) );
+			\parse_str( (string) \wp_parse_url( $url, PHP_URL_QUERY ), $query );
+			return $this->mock_http_response( (string) \wp_json_encode( $this->feed( (int) $query['idparent'] ) ) );
+		}
+
+		if ( false !== \strpos( $url, '/getlikerslist' ) ) {
+			++$this->likers_requests;
+			return $this->mock_http_response(
+				null === $this->likers_body ? (string) \wp_json_encode( $this->likers ) : $this->likers_body
+			);
+		}
+
+		if ( false !== \strpos( $url, '/isuserindatabase' ) ) {
+			$exists = true;
+			foreach ( $this->gone_users as $gone ) {
+				if ( false !== \strpos( $url, 'screenname=' . $gone ) ) {
+					$exists = false;
+				}
+			}
+			return $this->mock_http_response( (string) \wp_json_encode( array( 'flInDatabase' => $exists ) ) );
+		}
+
+		if ( false !== \strpos( $url, '/getuserdata' ) ) {
+			if ( $this->users_unreachable ) {
+				return new \WP_Error( 'http_request_failed', 'could not connect' );
+			}
+			foreach ( $this->broken_users as $broken ) {
+				if ( false !== \strpos( $url, 'screenname=' . $broken ) ) {
+					return $this->mock_http_response(
+						'Can\'t get user data for "' . $broken . '" because there is no user with that name.',
+						503
+					);
+				}
+			}
+
+			/*
+			 * The shape /getuserdata really answers with: the home link, when
+			 * set, sits in prefs.myFeedLink; feedLink at the top level exists
+			 * only on items.
+			 */
+			$user = array(
+				'feedUrl' => 'https://rss.chat/users/x/rss.xml',
+				'prefs'   => array( 'myFeedTitle' => 'X' ),
+			);
+			if ( false !== \strpos( $url, 'screenname=carol' ) ) {
+				$user['prefs']['myFeedLink'] = 'https://carol.example/';
+			}
+			return $this->mock_http_response( (string) \wp_json_encode( $user ) );
 		}
 
 		return $response;
@@ -74,16 +191,22 @@ class Test_Backfeed extends TestCase {
 	 * The synthetic reply feed: the post, one reply, our own reply (which now
 	 * comes home too, deduped only by guid), and a nested reply to the first.
 	 *
+	 * @param int $rss_id rss.chat id of the post asked for.
 	 * @return array
 	 */
-	private function feed() {
+	private function feed( $rss_id ) {
+		$post = array(
+			'id'          => $rss_id,
+			'guid'        => $this->with_post_guid ? 'https://rss.chat/?id=' . $rss_id : '',
+			'screenname'  => 'me',
+			'description' => 'the post',
+		);
+		if ( $this->with_like_count ) {
+			$post['ctLikes'] = \count( $this->likers );
+		}
+
 		return array(
-			array(
-				'id'          => $this->rss_id,
-				'guid'        => 'https://rss.chat/?id=200',
-				'screenname'  => 'me',
-				'description' => 'the post',
-			),
+			$post,
 			array(
 				'id'           => 201,
 				'guid'         => 'https://rss.chat/?id=201',
@@ -161,7 +284,7 @@ class Test_Backfeed extends TestCase {
 	public function test_own_pushed_reply_not_reimported() {
 		$post_id = $this->synced_post();
 
-		// Simulate the comment WordPress pushed for reply 202: it stored the guid.
+		/* Simulate the comment WordPress pushed for reply 202: it stored the guid. */
 		$pushed = self::factory()->comment->create(
 			array(
 				'comment_post_ID'  => $post_id,
@@ -282,5 +405,414 @@ class Test_Backfeed extends TestCase {
 		\unregister_post_type( 'rssclub' );
 
 		$this->assertCount( 3, $this->comments_on( $post_id ) );
+	}
+
+	/**
+	 * The like comments on a post.
+	 *
+	 * @param int $post_id Post id.
+	 * @return \WP_Comment[]
+	 */
+	private function likes_on( $post_id ) {
+		return \get_comments(
+			array(
+				'post_id' => $post_id,
+				'type'    => 'like',
+			)
+		);
+	}
+
+	/**
+	 * A like on the post comes back as a comment of type "like", carrying the
+	 * liker's screenname and feed link, and the protocol meta.
+	 */
+	public function test_imports_likes_on_the_post() {
+		$post_id      = $this->synced_post();
+		$this->likers = array( 'carol' );
+
+		( new Backfeed() )->run();
+
+		$likes = $this->likes_on( $post_id );
+		$this->assertCount( 1, $likes );
+		$this->assertSame( 'carol', $likes[0]->comment_author );
+		$this->assertSame( 'https://carol.example/', $likes[0]->comment_author_url );
+		$this->assertSame( 0, (int) $likes[0]->comment_parent, 'a like on the post is top-level' );
+		$this->assertSame( Plugin::PROTOCOL, \get_comment_meta( $likes[0]->comment_ID, Plugin::META_PROTOCOL, true ) );
+		$this->assertCount(
+			3,
+			\get_comments(
+				array(
+					'post_id' => $post_id,
+					'type'    => 'comment',
+				)
+			),
+			'the replies are untouched, likes are a separate type'
+		);
+	}
+
+	/**
+	 * Running twice stores each like once (dedup by item id + screenname).
+	 */
+	public function test_likes_are_not_duplicated_on_second_run() {
+		$post_id      = $this->synced_post();
+		$this->likers = array( 'carol', 'dave' );
+
+		( new Backfeed() )->run();
+		( new Backfeed() )->run();
+
+		$this->assertCount( 2, $this->likes_on( $post_id ) );
+	}
+
+	/**
+	 * A like taken back on rss.chat (togglelike) is removed here too.
+	 */
+	public function test_withdrawn_like_is_removed() {
+		$post_id      = $this->synced_post();
+		$this->likers = array( 'carol', 'dave' );
+
+		( new Backfeed() )->run();
+		$this->assertCount( 2, $this->likes_on( $post_id ) );
+
+		$this->likers = array( 'dave' );
+		( new Backfeed() )->run();
+
+		$likes = $this->likes_on( $post_id );
+		$this->assertCount( 1, $likes );
+		$this->assertSame( 'dave', $likes[0]->comment_author );
+	}
+
+	/**
+	 * When every like is taken back the item reports ctLikes 0; the stored
+	 * likes still go, without an extra request for an empty list.
+	 */
+	public function test_all_likes_withdrawn_clears_stored_likes() {
+		$post_id      = $this->synced_post();
+		$this->likers = array( 'carol' );
+
+		( new Backfeed() )->run();
+		$this->assertCount( 1, $this->likes_on( $post_id ) );
+
+		$this->likers          = array();
+		$this->likers_requests = 0;
+		( new Backfeed() )->run();
+
+		$this->assertCount( 0, $this->likes_on( $post_id ) );
+		$this->assertSame( 0, $this->likers_requests, 'no request when the item reports no likes' );
+	}
+
+	/**
+	 * Un-liking must not touch the site's own like comments from elsewhere
+	 * (an ActivityPub like, say): only comments this plugin imported are
+	 * reconciled.
+	 */
+	public function test_reconcile_leaves_foreign_likes_alone() {
+		$post_id = $this->synced_post();
+		self::factory()->comment->create(
+			array(
+				'comment_post_ID'  => $post_id,
+				'comment_type'     => 'like',
+				'comment_author'   => 'fedi-user',
+				'comment_approved' => 1,
+			)
+		);
+
+		( new Backfeed() )->run();
+
+		$this->assertCount( 1, $this->likes_on( $post_id ) );
+	}
+
+	/**
+	 * Imported likes are never pushed back to rss.chat.
+	 */
+	public function test_imported_likes_are_not_pushed_back() {
+		$this->synced_post();
+		$this->likers = array( 'carol' );
+
+		( new Backfeed() )->run();
+
+		$this->assertFalse( $this->pushed );
+	}
+
+	/**
+	 * A liker without a home link (feedLink) gets their rss.chat feed as the
+	 * author URL, which is their identity on the network.
+	 */
+	public function test_like_author_url_falls_back_to_feed_url() {
+		$post_id      = $this->synced_post();
+		$this->likers = array( 'dave' );
+
+		( new Backfeed() )->run();
+
+		$likes = $this->likes_on( $post_id );
+		$this->assertCount( 1, $likes );
+		$this->assertSame( 'https://rss.chat/users/x/rss.xml', $likes[0]->comment_author_url );
+	}
+
+	/**
+	 * A post with many likes is not synced in one go: a run spends at most
+	 * LIKE_REQUESTS_PER_RUN requests on likes (the liker list plus one per
+	 * new liker), and the rest follow on the next run.
+	 */
+	public function test_like_requests_are_capped_per_run() {
+		$post_id = $this->synced_post();
+		for ( $i = 1; $i <= Backfeed::LIKE_REQUESTS_PER_RUN + 5; $i++ ) {
+			$this->likers[] = 'user' . $i;
+		}
+
+		( new Backfeed() )->run();
+		/* One request read the list, the rest stored a liker each. */
+		$this->assertCount( Backfeed::LIKE_REQUESTS_PER_RUN - 1, $this->likes_on( $post_id ) );
+
+		( new Backfeed() )->run();
+		$this->assertCount( Backfeed::LIKE_REQUESTS_PER_RUN + 5, $this->likes_on( $post_id ) );
+	}
+
+	/**
+	 * The budget is one per run, not per post, and the next run picks up at
+	 * the post it ran out on, so a post late in the list is not starved.
+	 */
+	public function test_next_run_resumes_where_the_budget_ran_out() {
+		$first  = $this->synced_post();
+		$second = self::factory()->post->create( array( 'post_status' => 'publish' ) );
+		\update_post_meta( $second, Plugin::META_ID, 300 );
+
+		for ( $i = 1; $i <= Backfeed::LIKE_REQUESTS_PER_RUN; $i++ ) {
+			$this->likers[] = 'user' . $i;
+		}
+
+		( new Backfeed() )->run();
+		$this->assertSame(
+			Backfeed::LIKE_REQUESTS_PER_RUN - 1,
+			\count( $this->likes_on( $first ) ) + \count( $this->likes_on( $second ) ),
+			'one run, one budget'
+		);
+
+		( new Backfeed() )->run();
+		$this->assertNotEmpty( $this->likes_on( $second ), 'the post that was skipped comes first next time' );
+	}
+
+	/**
+	 * A server that does not report a like count at all (an older instance,
+	 * a partial item) is not the same as zero likes: stored likes stay.
+	 */
+	public function test_missing_like_count_leaves_stored_likes_alone() {
+		$post_id      = $this->synced_post();
+		$this->likers = array( 'carol' );
+
+		( new Backfeed() )->run();
+		$this->assertCount( 1, $this->likes_on( $post_id ) );
+
+		$this->with_like_count = false;
+		( new Backfeed() )->run();
+
+		$this->assertCount( 1, $this->likes_on( $post_id ) );
+	}
+
+	/**
+	 * The item says it has likes but the list cannot be read as screennames
+	 * (a wrapped or differently shaped response): that is not "nobody likes
+	 * this any more", so the stored likes stay.
+	 */
+	public function test_unusable_liker_list_does_not_wipe_stored_likes() {
+		$post_id      = $this->synced_post();
+		$this->likers = array( 'carol' );
+
+		( new Backfeed() )->run();
+		$this->assertCount( 1, $this->likes_on( $post_id ) );
+
+		$this->likers_body = '{"likers":["carol"]}';
+		( new Backfeed() )->run();
+
+		$this->assertCount( 1, $this->likes_on( $post_id ) );
+	}
+
+	/**
+	 * Likes are reconciled even when the post item carries no guid: the guid
+	 * is what dedups replies, the post itself is never stored as a comment.
+	 */
+	public function test_likes_are_imported_when_the_post_item_has_no_guid() {
+		$post_id              = $this->synced_post();
+		$this->likers         = array( 'carol' );
+		$this->with_post_guid = false;
+
+		( new Backfeed() )->run();
+
+		$this->assertCount( 1, $this->likes_on( $post_id ) );
+	}
+
+	/**
+	 * A liker the server refuses to resolve (their account is gone, the like
+	 * row survives) is stored once, without a URL, and never asked for again.
+	 */
+	public function test_refused_liker_is_stored_once_without_a_url() {
+		$post_id            = $this->synced_post();
+		$this->likers       = array( 'ghost' );
+		$this->broken_users = array( 'ghost' );
+		$this->gone_users   = array( 'ghost' );
+
+		( new Backfeed() )->run();
+
+		$likes = $this->likes_on( $post_id );
+		$this->assertCount( 1, $likes );
+		$this->assertSame( '', $likes[0]->comment_author_url );
+
+		( new Backfeed() )->run();
+
+		$this->assertCount( 1, $this->likes_on( $post_id ), 'not asked for a second time' );
+	}
+
+	/**
+	 * When the server cannot be reached the like is not stored with a blank
+	 * URL for good; it waits for a run that reaches it.
+	 */
+	public function test_like_waits_when_the_server_cannot_be_reached() {
+		$post_id                 = $this->synced_post();
+		$this->likers            = array( 'carol' );
+		$this->users_unreachable = true;
+
+		( new Backfeed() )->run();
+		$this->assertCount( 0, $this->likes_on( $post_id ) );
+
+		$this->users_unreachable = false;
+		$this->gone_users        = array();
+		( new Backfeed() )->run();
+
+		$likes = $this->likes_on( $post_id );
+		$this->assertCount( 1, $likes );
+		$this->assertSame( 'https://carol.example/', $likes[0]->comment_author_url );
+	}
+
+	/**
+	 * Without a plugin that renders like comments the likes stay on the
+	 * network: they would only show up as empty comments here. The replies
+	 * come home as ever.
+	 */
+	public function test_likes_stay_on_the_network_without_a_plugin_that_shows_them() {
+		\remove_filter( 'rss_chat_import_likes', '__return_true' );
+
+		$post_id      = $this->synced_post();
+		$this->likers = array( 'carol' );
+
+		( new Backfeed() )->run();
+
+		$this->assertCount( 0, $this->likes_on( $post_id ) );
+		$this->assertSame( 0, $this->likers_requests, 'the liker list is not even read' );
+		$this->assertCount(
+			3,
+			\get_comments(
+				array(
+					'post_id' => $post_id,
+					'type'    => 'comment',
+				)
+			),
+			'replies are unaffected'
+		);
+	}
+
+	/**
+	 * The server refuses the lookup but still knows the account: that is a
+	 * passing failure, so the like waits instead of losing its URL.
+	 */
+	public function test_like_waits_when_a_known_user_cannot_be_read() {
+		$post_id            = $this->synced_post();
+		$this->likers       = array( 'carol' );
+		$this->broken_users = array( 'carol' );
+
+		( new Backfeed() )->run();
+		$this->assertCount( 0, $this->likes_on( $post_id ) );
+
+		$this->broken_users = array();
+		( new Backfeed() )->run();
+
+		$likes = $this->likes_on( $post_id );
+		$this->assertCount( 1, $likes );
+		$this->assertSame( 'https://carol.example/', $likes[0]->comment_author_url );
+	}
+
+	/**
+	 * A second run while one is already going does nothing: two overlapping
+	 * cron requests must not both insert the same reply or like.
+	 */
+	public function test_a_second_run_is_skipped_while_one_holds_the_lock() {
+		$post_id = $this->synced_post();
+
+		$held = new Backfeed();
+		$this->assertTrue( $held->lock(), 'the lock is free to start with' );
+
+		( new Backfeed() )->run();
+
+		$this->assertCount( 0, \get_comments( array( 'post_id' => $post_id ) ), 'nothing imported while locked' );
+
+		$held->unlock();
+		( new Backfeed() )->run();
+
+		$this->assertCount( 3, \get_comments( array( 'post_id' => $post_id ) ) );
+	}
+
+	/**
+	 * The lock is released when a run ends, so the next one gets it.
+	 */
+	public function test_the_lock_is_released_after_a_run() {
+		$this->synced_post();
+
+		( new Backfeed() )->run();
+
+		$backfeed = new Backfeed();
+		$this->assertTrue( $backfeed->lock(), 'free again' );
+		$backfeed->unlock();
+	}
+
+	/**
+	 * A run that overran its lease, and lost it to the next run, must not
+	 * take that run's lease away when it finally finishes.
+	 */
+	public function test_unlock_leaves_another_runs_lease_alone() {
+		$slow = new Backfeed();
+		$this->assertTrue( $slow->lock() );
+
+		/* The next run took the lease over after this one overran. */
+		\update_option( Backfeed::OPTION_LOCK, 'another-run|' . ( \time() + 600 ) );
+
+		$slow->unlock();
+
+		$this->assertSame( 'another-run|' . ( \time() + 600 ), \get_option( Backfeed::OPTION_LOCK ) );
+
+		\delete_option( Backfeed::OPTION_LOCK );
+	}
+
+	/**
+	 * A lease nobody gave back, because the run died, is taken over once it
+	 * has run out, so the importer does not stop for good.
+	 */
+	public function test_an_expired_lease_is_taken_over() {
+		\update_option( Backfeed::OPTION_LOCK, 'dead-run|' . ( \time() - 1 ) );
+
+		$backfeed = new Backfeed();
+
+		$this->assertTrue( $backfeed->lock(), 'an expired lease is free' );
+
+		$backfeed->unlock();
+	}
+
+	/**
+	 * Asking whether a liker still exists is a request like any other, so it
+	 * comes out of the run's budget.
+	 */
+	public function test_the_existence_check_is_charged_to_the_budget() {
+		$post_id            = $this->synced_post();
+		$this->broken_users = array();
+		for ( $i = 1; $i <= Backfeed::LIKE_REQUESTS_PER_RUN; $i++ ) {
+			$this->likers[]       = 'user' . $i;
+			$this->broken_users[] = 'user' . $i;
+			$this->gone_users[]   = 'user' . $i;
+		}
+
+		( new Backfeed() )->run();
+
+		/*
+		 * One request read the list; each of these likers then costs a lookup
+		 * plus the existence check, so half of the rest get through.
+		 */
+		$this->assertCount( (int) \ceil( ( Backfeed::LIKE_REQUESTS_PER_RUN - 1 ) / 2 ), $this->likes_on( $post_id ) );
 	}
 }

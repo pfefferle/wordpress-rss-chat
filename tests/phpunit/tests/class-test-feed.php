@@ -56,8 +56,10 @@ class Test_Feed extends TestCase {
 	private function render_feed() {
 		$this->go_to( '/?feed=rss2' );
 
-		// The feed template calls header(); output has already started under
-		// PHPUnit, so swallow only that "headers already sent" warning.
+		/*
+		 * The feed template calls header(); output has already started under
+		 * PHPUnit, so swallow only that "headers already sent" warning.
+		 */
 		// phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_set_error_handler -- Test-only: scope a single expected warning.
 		\set_error_handler(
 			static function ( $errno, $errstr ) {
@@ -126,5 +128,70 @@ class Test_Feed extends TestCase {
 		$feed = $this->render_feed();
 
 		$this->assertStringNotContainsString( '<source:account', $feed );
+	}
+
+	/**
+	 * The comments count the feed advertises is the number of replies, not
+	 * every comment row: likes are stored as comments too, and counting them
+	 * would tell the network about replies its reply feed does not have.
+	 */
+	public function test_comments_count_ignores_likes() {
+		$post_id = $this->create_chat_post();
+
+		self::factory()->comment->create(
+			array(
+				'comment_post_ID'  => $post_id,
+				'comment_content'  => 'a reply',
+				'comment_approved' => 1,
+			)
+		);
+		foreach ( array( 'carol', 'dave' ) as $screenname ) {
+			self::factory()->comment->create(
+				array(
+					'comment_post_ID'  => $post_id,
+					'comment_type'     => 'like',
+					'comment_author'   => $screenname,
+					'comment_approved' => 1,
+				)
+			);
+		}
+
+		$feed = $this->render_feed();
+
+		$this->assertStringContainsString( '<source:comments count="1"', $feed );
+	}
+
+	/**
+	 * A post with no comments at all needs no counting query: the feed is a
+	 * public endpoint, polled often, with one item per synced post.
+	 */
+	public function test_reply_count_does_not_query_a_post_without_comments() {
+		$this->create_chat_post();
+
+		$before = \get_num_queries();
+		$feed   = $this->render_feed();
+		$after  = \get_num_queries();
+
+		$this->assertStringContainsString( '<source:comments count="0"', $feed );
+
+		$post_id = self::factory()->post->create( array( 'post_status' => 'publish' ) );
+		\set_post_format( $post_id, 'chat' );
+
+		$this->assertSame(
+			$after - $before,
+			$this->queries_rendering_feed(),
+			'the second chat post costs no counting query either'
+		);
+	}
+
+	/**
+	 * Queries spent rendering the feed once.
+	 *
+	 * @return int
+	 */
+	private function queries_rendering_feed() {
+		$before = \get_num_queries();
+		$this->render_feed();
+		return \get_num_queries() - $before;
 	}
 }

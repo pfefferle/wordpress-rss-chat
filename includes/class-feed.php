@@ -81,8 +81,10 @@ class Feed {
 			return;
 		}
 
-		// WordPress has no stored markdown, so approximate it with the rendered
-		// content as plain text.
+		/*
+		 * WordPress has no stored markdown, so approximate it with the rendered
+		 * content as plain text.
+		 */
 		$markdown = \wp_strip_all_tags( \get_the_content_feed( 'rss2' ) );
 		if ( '' !== $markdown ) {
 			printf(
@@ -93,8 +95,36 @@ class Feed {
 
 		printf(
 			"\t\t<source:comments count=\"%1\$d\" feedUrl=\"%2\$s\"/>\n",
-			(int) \get_comments_number( $post ),
+			(int) $this->reply_count( $post ),
 			\esc_url( \get_post_comments_feed_link( $post->ID ) )
+		);
+	}
+
+	/**
+	 * How many replies the post has. Not get_comments_number(), which counts
+	 * every approved comment row: likes are stored as comments too, and the
+	 * network would read them as replies its reply feed does not contain.
+	 *
+	 * @param \WP_Post $post The post.
+	 * @return int
+	 */
+	private function reply_count( $post ) {
+		/*
+		 * The stored count counts likes too, so it cannot answer the question
+		 * on its own. At zero it can: nothing of any type is there, so there
+		 * is nothing to count and no query to run.
+		 */
+		if ( 0 === (int) $post->comment_count ) {
+			return 0;
+		}
+
+		return (int) \get_comments(
+			array(
+				'post_id' => $post->ID,
+				'type'    => 'comment',
+				'status'  => 'approve',
+				'count'   => true,
+			)
 		);
 	}
 }

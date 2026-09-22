@@ -29,6 +29,17 @@ class API {
 	}
 
 	/**
+	 * Fetch the likes of a post: the screennames of everyone who liked it, in
+	 * the order they did.
+	 *
+	 * @param int $id Post id.
+	 * @return string[]|\WP_Error
+	 */
+	public function get_likes( $id ) {
+		return $this->get( '/getlikerslist', array( 'id' => (int) $id ) );
+	}
+
+	/**
 	 * Publish a post.
 	 *
 	 * @param array $item Item payload (e.g. description, title, inReplyTo).
@@ -53,6 +64,23 @@ class API {
 			$query['screenname'] = $screenname;
 		}
 		return $this->get( '/getuserdata', $query );
+	}
+
+	/**
+	 * Whether the server has an account under this screenname.
+	 *
+	 * Returns null when the question could not be answered, which is not the
+	 * same as "no": the caller decides what to do with a maybe.
+	 *
+	 * @param string $screenname Screenname.
+	 * @return bool|null
+	 */
+	public function user_exists( $screenname ) {
+		$result = $this->get( '/isuserindatabase', array( 'screenname' => $screenname ) );
+		if ( ! \is_array( $result ) || ! isset( $result['flInDatabase'] ) ) {
+			return null;
+		}
+		return (bool) $result['flInDatabase'];
 	}
 
 	/**
