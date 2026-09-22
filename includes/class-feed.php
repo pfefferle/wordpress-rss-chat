@@ -81,8 +81,10 @@ class Feed {
 			return;
 		}
 
-		// WordPress has no stored markdown, so approximate it with the rendered
-		// content as plain text.
+		/*
+		 * WordPress has no stored markdown, so approximate it with the rendered
+		 * content as plain text.
+		 */
 		$markdown = \wp_strip_all_tags( \get_the_content_feed( 'rss2' ) );
 		if ( '' !== $markdown ) {
 			printf(

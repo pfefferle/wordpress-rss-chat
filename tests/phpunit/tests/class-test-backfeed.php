@@ -96,8 +96,10 @@ class Test_Backfeed extends TestCase {
 		$this->with_post_guid    = true;
 		\add_filter( 'pre_http_request', array( $this, 'stub_http' ), 10, 3 );
 
-		// Likes are only imported when a plugin that renders them is active;
-		// the suite switches that on and the gate has its own test.
+		/*
+		 * Likes are only imported when a plugin that renders them is active;
+		 * the suite switches that on and the gate has its own test.
+		 */
 		\add_filter( 'rss_chat_import_likes', '__return_true' );
 	}
 
@@ -148,9 +150,12 @@ class Test_Backfeed extends TestCase {
 					);
 				}
 			}
-			// The shape /getuserdata really answers with: the home link, when
-			// set, sits in prefs.myFeedLink; feedLink at the top level exists
-			// only on items.
+
+			/*
+			 * The shape /getuserdata really answers with: the home link, when
+			 * set, sits in prefs.myFeedLink; feedLink at the top level exists
+			 * only on items.
+			 */
 			$user = array(
 				'feedUrl' => 'https://rss.chat/users/x/rss.xml',
 				'prefs'   => array( 'myFeedTitle' => 'X' ),
@@ -261,7 +266,7 @@ class Test_Backfeed extends TestCase {
 	public function test_own_pushed_reply_not_reimported() {
 		$post_id = $this->synced_post();
 
-		// Simulate the comment WordPress pushed for reply 202: it stored the guid.
+		/* Simulate the comment WordPress pushed for reply 202: it stored the guid. */
 		$pushed = self::factory()->comment->create(
 			array(
 				'comment_post_ID'  => $post_id,
@@ -537,7 +542,7 @@ class Test_Backfeed extends TestCase {
 		}
 
 		( new Backfeed() )->run();
-		// One request read the list, the rest stored a liker each.
+		/* One request read the list, the rest stored a liker each. */
 		$this->assertCount( Backfeed::LIKE_REQUESTS_PER_RUN - 1, $this->likes_on( $post_id ) );
 
 		( new Backfeed() )->run();

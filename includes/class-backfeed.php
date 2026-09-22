@@ -67,7 +67,7 @@ class Backfeed {
 	 * @return void
 	 */
 	public function init() {
-		// A short interval is intentional: chat replies should arrive promptly.
+		/* A short interval is intentional: chat replies should arrive promptly. */
 		\add_filter( 'cron_schedules', array( $this, 'add_interval' ) ); // phpcs:ignore WordPress.WP.CronInterval.CronSchedulesInterval
 		\add_action( self::HOOK, array( $this, 'run' ) );
 
@@ -134,9 +134,11 @@ class Backfeed {
 		$this->like_budget = self::LIKE_REQUESTS_PER_RUN;
 		$this->stalled_at  = 0;
 
-		// Every registered type, not just the ones currently enabled for
-		// publishing: an item that is already on rss.chat keeps getting its
-		// replies even after its type is unticked. The synced id is the test.
+		/*
+		 * Every registered type, not just the ones currently enabled for
+		 * publishing: an item that is already on rss.chat keeps getting its
+		 * replies even after its type is unticked. The synced id is the test.
+		 */
 		$posts = \get_posts(
 			array(
 				'post_type'      => \array_values( \get_post_types() ),
@@ -146,8 +148,10 @@ class Backfeed {
 			)
 		);
 
-		// Replies are read for every post, but the like budget is not enough
-		// for all of them at once, so start where the last run stopped.
+		/*
+		 * Replies are read for every post, but the like budget is not enough
+		 * for all of them at once, so start where the last run stopped.
+		 */
 		$posts = $this->start_at( \array_map( 'intval', $posts ), (int) \get_option( self::OPTION_CURSOR, 0 ) );
 
 		foreach ( $posts as $post_id ) {
@@ -202,24 +206,28 @@ class Backfeed {
 				continue;
 			}
 
-			// The array leads with the post itself. Its likes are the one
-			// thing we take from it; replies' likes stay on the network. It
-			// is never stored as a comment, so it needs no guid.
+			/*
+			 * The array leads with the post itself. Its likes are the one
+			 * thing we take from it; replies' likes stay on the network. It
+			 * is never stored as a comment, so it needs no guid.
+			 */
 			if ( isset( $item['id'] ) && (int) $item['id'] === $rss_id ) {
 				$this->import_likes( $post_id, $rss_id, $item );
 				continue;
 			}
 
-			// A reply is deduped by its guid, so one without is unusable.
+			/* A reply is deduped by its guid, so one without is unusable. */
 			if ( empty( $item['guid'] ) ) {
 				continue;
 			}
 
-			// The guid dedup below is the only loop guard we need: a reply that
-			// WordPress pushed already carries its guid on a comment, so it is
-			// skipped here. Replies the owner wrote directly on rss.chat, even
-			// under the same account, have a guid we have not seen, so they come
-			// home like anyone else's.
+			/*
+			 * The guid dedup below is the only loop guard we need: a reply that
+			 * WordPress pushed already carries its guid on a comment, so it is
+			 * skipped here. Replies the owner wrote directly on rss.chat, even
+			 * under the same account, have a guid we have not seen, so they come
+			 * home like anyone else's.
+			 */
 			if ( $this->already_imported( $item['guid'] ) ) {
 				continue;
 			}
@@ -244,14 +252,18 @@ class Backfeed {
 	 * @return void
 	 */
 	private function import_likes( $post_id, $rss_id, array $item ) {
-		// Nothing here renders a like: leave them on the network rather than
-		// filling the comment list with empty comments.
+		/*
+		 * Nothing here renders a like: leave them on the network rather than
+		 * filling the comment list with empty comments.
+		 */
 		if ( ! Plugin::should_import_likes() ) {
 			return;
 		}
 
-		// No count at all (an older server, a partial item) is not zero:
-		// there is nothing to reconcile against, so leave things as they are.
+		/*
+		 * No count at all (an older server, a partial item) is not zero:
+		 * there is nothing to reconcile against, so leave things as they are.
+		 */
 		if ( ! isset( $item['ctLikes'] ) ) {
 			return;
 		}
@@ -259,8 +271,10 @@ class Backfeed {
 		$likers = array();
 
 		if ( (int) $item['ctLikes'] > 0 ) {
-			// Reading the list is a request too. Out of budget: leave this
-			// post whole for the next run rather than half-reconciled.
+			/*
+			 * Reading the list is a request too. Out of budget: leave this
+			 * post whole for the next run rather than half-reconciled.
+			 */
 			if ( $this->like_budget <= 0 ) {
 				$this->stall_at( $post_id );
 				return;
@@ -268,8 +282,11 @@ class Backfeed {
 
 			--$this->like_budget;
 			$likers = ( new API() )->get_likes( $rss_id );
-			// On a failed read leave the stored likes as they are, rather than
-			// mistaking the error for "nobody likes this any more".
+
+			/*
+			 * On a failed read leave the stored likes as they are, rather than
+			 * mistaking the error for "nobody likes this any more".
+			 */
 			if ( \is_wp_error( $likers ) || ! \is_array( $likers ) ) {
 				return;
 			}
@@ -282,9 +299,11 @@ class Backfeed {
 			}
 		}
 
-		// The count says there are likes but none of them came back as a
-		// screenname: an unexpected shape, not an empty list. Deleting every
-		// stored like on that reading would be wrong.
+		/*
+		 * The count says there are likes but none of them came back as a
+		 * screenname: an unexpected shape, not an empty list. Deleting every
+		 * stored like on that reading would be wrong.
+		 */
 		if ( (int) $item['ctLikes'] > 0 && empty( $wanted ) ) {
 			return;
 		}
@@ -366,8 +385,10 @@ class Backfeed {
 	 * @return void
 	 */
 	private function insert_like( $post_id, $screenname, $key ) {
-		// The record is only read this once, so a failed read must not leave
-		// the like with a blank URL for good: skip it, the next run retries.
+		/*
+		 * The record is only read this once, so a failed read must not leave
+		 * the like with a blank URL for good: skip it, the next run retries.
+		 */
 		$url = $this->author_url( $screenname );
 		if ( null === $url ) {
 			return;
@@ -408,10 +429,12 @@ class Backfeed {
 		$user = ( new API() )->get_user_data( $screenname );
 
 		if ( \is_wp_error( $user ) ) {
-			// The server answered, it just has nothing under that name: the
-			// liker deleted their account, the like row outlived it. File the
-			// like without a URL instead of asking again every five minutes.
-			// A server we could not reach is asked again.
+			/*
+			 * The server answered, it just has nothing under that name: the
+			 * liker deleted their account, the like row outlived it. File the
+			 * like without a URL instead of asking again every five minutes.
+			 * A server we could not reach is asked again.
+			 */
 			return 'rss_chat_server_error' === $user->get_error_code() ? '' : null;
 		}
 
@@ -419,8 +442,10 @@ class Backfeed {
 			return null;
 		}
 
-		// The home link is a preference (items carry it flattened as
-		// feedLink, the user record does not).
+		/*
+		 * The home link is a preference (items carry it flattened as
+		 * feedLink, the user record does not).
+		 */
 		if ( isset( $user['prefs']['myFeedLink'] ) && \is_string( $user['prefs']['myFeedLink'] ) && '' !== $user['prefs']['myFeedLink'] ) {
 			return $user['prefs']['myFeedLink'];
 		}
