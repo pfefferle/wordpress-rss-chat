@@ -320,10 +320,14 @@ class Backfeed {
 			return null;
 		}
 
-		foreach ( array( 'feedLink', 'feedUrl' ) as $field ) {
-			if ( ! empty( $user[ $field ] ) && \is_string( $user[ $field ] ) ) {
-				return $user[ $field ];
-			}
+		// The home link is a preference (items carry it flattened as
+		// feedLink, the user record does not).
+		if ( isset( $user['prefs']['myFeedLink'] ) && \is_string( $user['prefs']['myFeedLink'] ) && '' !== $user['prefs']['myFeedLink'] ) {
+			return $user['prefs']['myFeedLink'];
+		}
+
+		if ( isset( $user['feedUrl'] ) && \is_string( $user['feedUrl'] ) ) {
+			return $user['feedUrl'];
 		}
 
 		return '';

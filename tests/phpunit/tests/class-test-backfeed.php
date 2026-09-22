@@ -111,9 +111,15 @@ class Test_Backfeed extends TestCase {
 					return $this->mock_http_response( 'Server error', 503 );
 				}
 			}
-			$user = array( 'feedUrl' => 'https://rss.chat/users/x/rss.xml' );
+			// The shape /getuserdata really answers with: the home link, when
+			// set, sits in prefs.myFeedLink; feedLink at the top level exists
+			// only on items.
+			$user = array(
+				'feedUrl' => 'https://rss.chat/users/x/rss.xml',
+				'prefs'   => array( 'myFeedTitle' => 'X' ),
+			);
 			if ( false !== \strpos( $url, 'screenname=carol' ) ) {
-				$user['feedLink'] = 'https://carol.example/';
+				$user['prefs']['myFeedLink'] = 'https://carol.example/';
 			}
 			return $this->mock_http_response( (string) \wp_json_encode( $user ) );
 		}
