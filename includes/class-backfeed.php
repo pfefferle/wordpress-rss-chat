@@ -185,8 +185,8 @@ class Backfeed {
 	 * of type "like", likes taken back (togglelike) are deleted again.
 	 *
 	 * Likes have no guid, so each one is keyed by item id plus screenname.
-	 * The list is only fetched when the item reports likes at all; at zero
-	 * everything stored for the item goes.
+	 * The list is only fetched when the item reports likes; at a count of
+	 * zero everything stored for the item goes.
 	 *
 	 * @param int   $post_id Local post id.
 	 * @param int   $rss_id  rss.chat id of the post.
@@ -194,9 +194,15 @@ class Backfeed {
 	 * @return void
 	 */
 	private function import_likes( $post_id, $rss_id, array $item ) {
+		// No count at all (an older server, a partial item) is not zero:
+		// there is nothing to reconcile against, so leave things as they are.
+		if ( ! isset( $item['ctLikes'] ) ) {
+			return;
+		}
+
 		$likers = array();
 
-		if ( ! empty( $item['ctLikes'] ) ) {
+		if ( (int) $item['ctLikes'] > 0 ) {
 			$likers = ( new API() )->get_likes( $rss_id );
 			// On a failed read leave the stored likes as they are, rather than
 			// mistaking the error for "nobody likes this any more".

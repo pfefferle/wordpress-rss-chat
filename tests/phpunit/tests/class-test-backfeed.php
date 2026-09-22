@@ -53,6 +53,13 @@ class Test_Backfeed extends TestCase {
 	private $broken_users = array();
 
 	/**
+	 * Whether the post item carries a ctLikes field at all.
+	 *
+	 * @var bool
+	 */
+	private $with_like_count = true;
+
+	/**
 	 * Set up: stub the reply feed.
 	 */
 	public function set_up(): void {
@@ -62,6 +69,7 @@ class Test_Backfeed extends TestCase {
 		$this->likers          = array();
 		$this->likers_requests = 0;
 		$this->broken_users    = array();
+		$this->with_like_count = true;
 		\add_filter( 'pre_http_request', array( $this, 'stub_http' ), 10, 3 );
 	}
 
@@ -121,14 +129,18 @@ class Test_Backfeed extends TestCase {
 	 * @return array
 	 */
 	private function feed( $rss_id ) {
+		$post = array(
+			'id'          => $rss_id,
+			'guid'        => 'https://rss.chat/?id=' . $rss_id,
+			'screenname'  => 'me',
+			'description' => 'the post',
+		);
+		if ( $this->with_like_count ) {
+			$post['ctLikes'] = \count( $this->likers );
+		}
+
 		return array(
-			array(
-				'id'          => $rss_id,
-				'guid'        => 'https://rss.chat/?id=' . $rss_id,
-				'screenname'  => 'me',
-				'description' => 'the post',
-				'ctLikes'     => \count( $this->likers ),
-			),
+			$post,
 			array(
 				'id'           => 201,
 				'guid'         => 'https://rss.chat/?id=201',
@@ -531,5 +543,22 @@ class Test_Backfeed extends TestCase {
 
 		$total = \count( $this->likes_on( $first ) ) + \count( $this->likes_on( $second ) );
 		$this->assertSame( 2 * Backfeed::LIKES_PER_RUN, $total, 'the rest follows next run' );
+	}
+
+	/**
+	 * A server that does not report a like count at all (an older instance,
+	 * a partial item) is not the same as zero likes: stored likes stay.
+	 */
+	public function test_missing_like_count_leaves_stored_likes_alone() {
+		$post_id      = $this->synced_post();
+		$this->likers = array( 'carol' );
+
+		( new Backfeed() )->run();
+		$this->assertCount( 1, $this->likes_on( $post_id ) );
+
+		$this->with_like_count = false;
+		( new Backfeed() )->run();
+
+		$this->assertCount( 1, $this->likes_on( $post_id ) );
 	}
 }
