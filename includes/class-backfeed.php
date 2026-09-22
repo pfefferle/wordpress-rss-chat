@@ -26,19 +26,32 @@ class Backfeed {
 	const INTERVAL = 'rss_chat_interval';
 
 	/**
-	 * How many new likes one run stores, across all posts. Each new liker
-	 * costs one /getuserdata request, so this keeps a cron run bounded when
-	 * posts with many likes are synced for the first time; the rest follow
-	 * on the next run.
+	 * How many requests one run spends on likes, across all posts: reading a
+	 * post's liker list costs one, storing a new liker one more. That keeps a
+	 * cron run bounded when posts with many likes are synced for the first
+	 * time; the rest follow on the next run.
 	 */
-	const LIKES_PER_RUN = 20;
+	const LIKE_REQUESTS_PER_RUN = 20;
 
 	/**
-	 * New likes this run may still store.
+	 * Where the next run starts, so the budget does not always go to the same
+	 * posts: the id of the post this run ran out of budget on.
+	 */
+	const OPTION_CURSOR = 'rss_chat_backfeed_cursor';
+
+	/**
+	 * Like requests this run may still make.
 	 *
 	 * @var int
 	 */
-	private $like_budget = self::LIKES_PER_RUN;
+	private $like_budget = self::LIKE_REQUESTS_PER_RUN;
+
+	/**
+	 * The post the budget ran out on, if any.
+	 *
+	 * @var int
+	 */
+	private $stalled_at = 0;
 
 	/**
 	 * True while this class is inserting comments, so Syndication does not
@@ -118,7 +131,8 @@ class Backfeed {
 			return;
 		}
 
-		$this->like_budget = self::LIKES_PER_RUN;
+		$this->like_budget = self::LIKE_REQUESTS_PER_RUN;
+		$this->stalled_at  = 0;
 
 		// Every registered type, not just the ones currently enabled for
 		// publishing: an item that is already on rss.chat keeps getting its
@@ -132,6 +146,10 @@ class Backfeed {
 			)
 		);
 
+		// Replies are read for every post, but the like budget is not enough
+		// for all of them at once, so start where the last run stopped.
+		$posts = $this->start_at( \array_map( 'intval', $posts ), (int) \get_option( self::OPTION_CURSOR, 0 ) );
+
 		foreach ( $posts as $post_id ) {
 			$rss_id = (int) \get_post_meta( $post_id, Plugin::META_ID, true );
 			if ( $rss_id <= 0 ) {
@@ -140,6 +158,30 @@ class Backfeed {
 
 			$this->import_replies( $post_id, $rss_id );
 		}
+
+		\update_option( self::OPTION_CURSOR, $this->stalled_at, false );
+	}
+
+	/**
+	 * Rotate the post list so it begins at a given post, keeping every post
+	 * in the run. A cursor of 0, or one that is no longer in the list, leaves
+	 * the order alone.
+	 *
+	 * @param int[] $post_ids Post ids.
+	 * @param int   $cursor   Post id to begin at.
+	 * @return int[]
+	 */
+	private function start_at( array $post_ids, $cursor ) {
+		if ( $cursor <= 0 ) {
+			return $post_ids;
+		}
+
+		$at = \array_search( $cursor, $post_ids, true );
+		if ( false === $at || 0 === $at ) {
+			return $post_ids;
+		}
+
+		return \array_merge( \array_slice( $post_ids, $at ), \array_slice( $post_ids, 0, $at ) );
 	}
 
 	/**
@@ -209,6 +251,14 @@ class Backfeed {
 		$likers = array();
 
 		if ( (int) $item['ctLikes'] > 0 ) {
+			// Reading the list is a request too. Out of budget: leave this
+			// post whole for the next run rather than half-reconciled.
+			if ( $this->like_budget <= 0 ) {
+				$this->stall_at( $post_id );
+				return;
+			}
+
+			--$this->like_budget;
 			$likers = ( new API() )->get_likes( $rss_id );
 			// On a failed read leave the stored likes as they are, rather than
 			// mistaking the error for "nobody likes this any more".
@@ -237,10 +287,29 @@ class Backfeed {
 			\wp_delete_comment( $comment_id, true );
 		}
 
-		$missing = \array_slice( \array_diff_key( $wanted, $stored ), 0, \max( 0, $this->like_budget ), true );
+		$outstanding = \array_diff_key( $wanted, $stored );
+		$missing     = \array_slice( $outstanding, 0, \max( 0, $this->like_budget ), true );
+
+		if ( \count( $missing ) < \count( $outstanding ) ) {
+			$this->stall_at( $post_id );
+		}
+
 		foreach ( $missing as $key => $screenname ) {
 			--$this->like_budget;
 			$this->insert_like( $post_id, $screenname, $key );
+		}
+	}
+
+	/**
+	 * Remember the first post this run could not finish, so the next one
+	 * begins there.
+	 *
+	 * @param int $post_id Local post id.
+	 * @return void
+	 */
+	private function stall_at( $post_id ) {
+		if ( 0 === $this->stalled_at ) {
+			$this->stalled_at = (int) $post_id;
 		}
 	}
 
@@ -329,6 +398,15 @@ class Backfeed {
 	 */
 	private function author_url( $screenname ) {
 		$user = ( new API() )->get_user_data( $screenname );
+
+		if ( \is_wp_error( $user ) ) {
+			// The server answered, it just has nothing under that name: the
+			// liker deleted their account, the like row outlived it. File the
+			// like without a URL instead of asking again every five minutes.
+			// A server we could not reach is asked again.
+			return 'rss_chat_server_error' === $user->get_error_code() ? '' : null;
+		}
+
 		if ( ! \is_array( $user ) ) {
 			return null;
 		}

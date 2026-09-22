@@ -53,6 +53,13 @@ class Test_Backfeed extends TestCase {
 	private $broken_users = array();
 
 	/**
+	 * Whether /getuserdata cannot be reached at all (a transport error).
+	 *
+	 * @var bool
+	 */
+	private $users_unreachable = false;
+
+	/**
 	 * Whether the post item carries a ctLikes field at all.
 	 *
 	 * @var bool
@@ -79,13 +86,14 @@ class Test_Backfeed extends TestCase {
 	public function set_up(): void {
 		parent::set_up();
 
-		$this->pushed          = false;
-		$this->likers          = array();
-		$this->likers_requests = 0;
-		$this->broken_users    = array();
-		$this->with_like_count = true;
-		$this->likers_body     = null;
-		$this->with_post_guid  = true;
+		$this->pushed            = false;
+		$this->likers            = array();
+		$this->likers_requests   = 0;
+		$this->broken_users      = array();
+		$this->users_unreachable = false;
+		$this->with_like_count   = true;
+		$this->likers_body       = null;
+		$this->with_post_guid    = true;
 		\add_filter( 'pre_http_request', array( $this, 'stub_http' ), 10, 3 );
 	}
 
@@ -124,9 +132,15 @@ class Test_Backfeed extends TestCase {
 		}
 
 		if ( false !== \strpos( $url, '/getuserdata' ) ) {
+			if ( $this->users_unreachable ) {
+				return new \WP_Error( 'http_request_failed', 'could not connect' );
+			}
 			foreach ( $this->broken_users as $broken ) {
 				if ( false !== \strpos( $url, 'screenname=' . $broken ) ) {
-					return $this->mock_http_response( 'Server error', 503 );
+					return $this->mock_http_response(
+						'Can\'t get user data for "' . $broken . '" because there is no user with that name.',
+						503
+					);
 				}
 			}
 			// The shape /getuserdata really answers with: the home link, when
@@ -507,66 +521,46 @@ class Test_Backfeed extends TestCase {
 	}
 
 	/**
-	 * A post with many likes is not synced in one go: each run stores at most
-	 * LIKES_PER_RUN new likes, so a cron run stays bounded, and the rest
-	 * follow on the next run.
+	 * A post with many likes is not synced in one go: a run spends at most
+	 * LIKE_REQUESTS_PER_RUN requests on likes (the liker list plus one per
+	 * new liker), and the rest follow on the next run.
 	 */
-	public function test_new_likes_are_capped_per_run() {
+	public function test_like_requests_are_capped_per_run() {
 		$post_id = $this->synced_post();
-		for ( $i = 1; $i <= Backfeed::LIKES_PER_RUN + 5; $i++ ) {
+		for ( $i = 1; $i <= Backfeed::LIKE_REQUESTS_PER_RUN + 5; $i++ ) {
 			$this->likers[] = 'user' . $i;
 		}
 
 		( new Backfeed() )->run();
-		$this->assertCount( Backfeed::LIKES_PER_RUN, $this->likes_on( $post_id ) );
+		// One request read the list, the rest stored a liker each.
+		$this->assertCount( Backfeed::LIKE_REQUESTS_PER_RUN - 1, $this->likes_on( $post_id ) );
 
 		( new Backfeed() )->run();
-		$this->assertCount( Backfeed::LIKES_PER_RUN + 5, $this->likes_on( $post_id ) );
+		$this->assertCount( Backfeed::LIKE_REQUESTS_PER_RUN + 5, $this->likes_on( $post_id ) );
 	}
 
 	/**
-	 * When the liker's record cannot be read the like is not stored with a
-	 * blank author URL for good; it is skipped and comes on the next run.
+	 * The budget is one per run, not per post, and the next run picks up at
+	 * the post it ran out on, so a post late in the list is not starved.
 	 */
-	public function test_like_waits_for_a_successful_user_lookup() {
-		$post_id            = $this->synced_post();
-		$this->likers       = array( 'carol', 'dave' );
-		$this->broken_users = array( 'dave' );
-
-		( new Backfeed() )->run();
-
-		$likes = $this->likes_on( $post_id );
-		$this->assertCount( 1, $likes );
-		$this->assertSame( 'carol', $likes[0]->comment_author );
-
-		$this->broken_users = array();
-		( new Backfeed() )->run();
-
-		$this->assertCount( 2, $this->likes_on( $post_id ) );
-	}
-
-	/**
-	 * The cap is a budget for the whole run, not per post: with many synced
-	 * posts a run still stores at most LIKES_PER_RUN new likes in total.
-	 */
-	public function test_like_cap_is_shared_across_posts() {
+	public function test_next_run_resumes_where_the_budget_ran_out() {
 		$first  = $this->synced_post();
 		$second = self::factory()->post->create( array( 'post_status' => 'publish' ) );
 		\update_post_meta( $second, Plugin::META_ID, 300 );
 
-		for ( $i = 1; $i <= Backfeed::LIKES_PER_RUN; $i++ ) {
+		for ( $i = 1; $i <= Backfeed::LIKE_REQUESTS_PER_RUN; $i++ ) {
 			$this->likers[] = 'user' . $i;
 		}
 
 		( new Backfeed() )->run();
-
-		$total = \count( $this->likes_on( $first ) ) + \count( $this->likes_on( $second ) );
-		$this->assertSame( Backfeed::LIKES_PER_RUN, $total, 'one run, one budget' );
+		$this->assertSame(
+			Backfeed::LIKE_REQUESTS_PER_RUN - 1,
+			\count( $this->likes_on( $first ) ) + \count( $this->likes_on( $second ) ),
+			'one run, one budget'
+		);
 
 		( new Backfeed() )->run();
-
-		$total = \count( $this->likes_on( $first ) ) + \count( $this->likes_on( $second ) );
-		$this->assertSame( 2 * Backfeed::LIKES_PER_RUN, $total, 'the rest follows next run' );
+		$this->assertNotEmpty( $this->likes_on( $second ), 'the post that was skipped comes first next time' );
 	}
 
 	/**
@@ -616,5 +610,45 @@ class Test_Backfeed extends TestCase {
 		( new Backfeed() )->run();
 
 		$this->assertCount( 1, $this->likes_on( $post_id ) );
+	}
+
+	/**
+	 * A liker the server refuses to resolve (their account is gone, the like
+	 * row survives) is stored once, without a URL, and never asked for again.
+	 */
+	public function test_refused_liker_is_stored_once_without_a_url() {
+		$post_id            = $this->synced_post();
+		$this->likers       = array( 'ghost' );
+		$this->broken_users = array( 'ghost' );
+
+		( new Backfeed() )->run();
+
+		$likes = $this->likes_on( $post_id );
+		$this->assertCount( 1, $likes );
+		$this->assertSame( '', $likes[0]->comment_author_url );
+
+		( new Backfeed() )->run();
+
+		$this->assertCount( 1, $this->likes_on( $post_id ), 'not asked for a second time' );
+	}
+
+	/**
+	 * When the server cannot be reached the like is not stored with a blank
+	 * URL for good; it waits for a run that reaches it.
+	 */
+	public function test_like_waits_when_the_server_cannot_be_reached() {
+		$post_id                 = $this->synced_post();
+		$this->likers            = array( 'carol' );
+		$this->users_unreachable = true;
+
+		( new Backfeed() )->run();
+		$this->assertCount( 0, $this->likes_on( $post_id ) );
+
+		$this->users_unreachable = false;
+		( new Backfeed() )->run();
+
+		$likes = $this->likes_on( $post_id );
+		$this->assertCount( 1, $likes );
+		$this->assertSame( 'https://carol.example/', $likes[0]->comment_author_url );
 	}
 }
