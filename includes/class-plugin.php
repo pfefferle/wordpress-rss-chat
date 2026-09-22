@@ -32,6 +32,12 @@ class Plugin {
 	const META_PROTOCOL = 'protocol';
 
 	/**
+	 * Comment meta on an imported like: "<rss.chat item id>:<screenname>".
+	 * Likes carry no guid on rss.chat, so this pair is what makes one unique.
+	 */
+	const META_LIKE = '_rss_chat_like';
+
+	/**
 	 * Value stored in the shared `protocol` comment meta to mark a comment as
 	 * originating from rss.chat (mirrors the ActivityPub plugin's convention).
 	 */

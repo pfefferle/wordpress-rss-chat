@@ -29,6 +29,17 @@ class API {
 	}
 
 	/**
+	 * Fetch the screennames of everyone who liked a post, in the order they
+	 * liked it.
+	 *
+	 * @param int $id Post id.
+	 * @return string[]|\WP_Error
+	 */
+	public function get_likers_list( $id ) {
+		return $this->get( '/getlikerslist', array( 'id' => (int) $id ) );
+	}
+
+	/**
 	 * Publish a post.
 	 *
 	 * @param array $item Item payload (e.g. description, title, inReplyTo).

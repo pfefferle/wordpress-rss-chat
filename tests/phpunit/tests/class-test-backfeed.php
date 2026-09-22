@@ -32,12 +32,28 @@ class Test_Backfeed extends TestCase {
 	private $rss_id = 200;
 
 	/**
+	 * Screennames /getlikerslist answers with for the post under test.
+	 *
+	 * @var string[]
+	 */
+	private $likers = array();
+
+	/**
+	 * How often /getlikerslist was requested.
+	 *
+	 * @var int
+	 */
+	private $likers_requests = 0;
+
+	/**
 	 * Set up: stub the reply feed.
 	 */
 	public function set_up(): void {
 		parent::set_up();
 
-		$this->pushed = false;
+		$this->pushed          = false;
+		$this->likers          = array();
+		$this->likers_requests = 0;
 		\add_filter( 'pre_http_request', array( $this, 'stub_http' ), 10, 3 );
 	}
 
@@ -67,6 +83,19 @@ class Test_Backfeed extends TestCase {
 			return $this->mock_http_response( (string) \wp_json_encode( $this->feed() ) );
 		}
 
+		if ( false !== \strpos( $url, '/getlikerslist' ) ) {
+			++$this->likers_requests;
+			return $this->mock_http_response( (string) \wp_json_encode( $this->likers ) );
+		}
+
+		if ( false !== \strpos( $url, '/getuserdata' ) ) {
+			$user = array( 'feedUrl' => 'https://rss.chat/users/x/rss.xml' );
+			if ( false !== \strpos( $url, 'screenname=carol' ) ) {
+				$user['feedLink'] = 'https://carol.example/';
+			}
+			return $this->mock_http_response( (string) \wp_json_encode( $user ) );
+		}
+
 		return $response;
 	}
 
@@ -83,6 +112,7 @@ class Test_Backfeed extends TestCase {
 				'guid'        => 'https://rss.chat/?id=200',
 				'screenname'  => 'me',
 				'description' => 'the post',
+				'ctLikes'     => \count( $this->likers ),
 			),
 			array(
 				'id'           => 201,
@@ -282,5 +312,146 @@ class Test_Backfeed extends TestCase {
 		\unregister_post_type( 'rssclub' );
 
 		$this->assertCount( 3, $this->comments_on( $post_id ) );
+	}
+
+	/**
+	 * The like comments on a post.
+	 *
+	 * @param int $post_id Post id.
+	 * @return \WP_Comment[]
+	 */
+	private function likes_on( $post_id ) {
+		return \get_comments(
+			array(
+				'post_id' => $post_id,
+				'type'    => 'like',
+			)
+		);
+	}
+
+	/**
+	 * A like on the post comes back as a comment of type "like", carrying the
+	 * liker's screenname and feed link, and the protocol meta.
+	 */
+	public function test_imports_likes_on_the_post() {
+		$post_id      = $this->synced_post();
+		$this->likers = array( 'carol' );
+
+		( new Backfeed() )->run();
+
+		$likes = $this->likes_on( $post_id );
+		$this->assertCount( 1, $likes );
+		$this->assertSame( 'carol', $likes[0]->comment_author );
+		$this->assertSame( 'https://carol.example/', $likes[0]->comment_author_url );
+		$this->assertSame( 0, (int) $likes[0]->comment_parent, 'a like on the post is top-level' );
+		$this->assertSame( Plugin::PROTOCOL, \get_comment_meta( $likes[0]->comment_ID, Plugin::META_PROTOCOL, true ) );
+		$this->assertCount(
+			3,
+			\get_comments(
+				array(
+					'post_id' => $post_id,
+					'type'    => 'comment',
+				)
+			),
+			'the replies are untouched, likes are a separate type'
+		);
+	}
+
+	/**
+	 * Running twice stores each like once (dedup by item id + screenname).
+	 */
+	public function test_likes_are_not_duplicated_on_second_run() {
+		$post_id      = $this->synced_post();
+		$this->likers = array( 'carol', 'dave' );
+
+		( new Backfeed() )->run();
+		( new Backfeed() )->run();
+
+		$this->assertCount( 2, $this->likes_on( $post_id ) );
+	}
+
+	/**
+	 * A like taken back on rss.chat (togglelike) is removed here too.
+	 */
+	public function test_withdrawn_like_is_removed() {
+		$post_id      = $this->synced_post();
+		$this->likers = array( 'carol', 'dave' );
+
+		( new Backfeed() )->run();
+		$this->assertCount( 2, $this->likes_on( $post_id ) );
+
+		$this->likers = array( 'dave' );
+		( new Backfeed() )->run();
+
+		$likes = $this->likes_on( $post_id );
+		$this->assertCount( 1, $likes );
+		$this->assertSame( 'dave', $likes[0]->comment_author );
+	}
+
+	/**
+	 * When every like is taken back the item reports ctLikes 0; the stored
+	 * likes still go, without an extra request for an empty list.
+	 */
+	public function test_all_likes_withdrawn_clears_stored_likes() {
+		$post_id      = $this->synced_post();
+		$this->likers = array( 'carol' );
+
+		( new Backfeed() )->run();
+		$this->assertCount( 1, $this->likes_on( $post_id ) );
+
+		$this->likers          = array();
+		$this->likers_requests = 0;
+		( new Backfeed() )->run();
+
+		$this->assertCount( 0, $this->likes_on( $post_id ) );
+		$this->assertSame( 0, $this->likers_requests, 'no request when the item reports no likes' );
+	}
+
+	/**
+	 * Un-liking must not touch the site's own like comments from elsewhere
+	 * (an ActivityPub like, say): only comments this plugin imported are
+	 * reconciled.
+	 */
+	public function test_reconcile_leaves_foreign_likes_alone() {
+		$post_id = $this->synced_post();
+		self::factory()->comment->create(
+			array(
+				'comment_post_ID'  => $post_id,
+				'comment_type'     => 'like',
+				'comment_author'   => 'fedi-user',
+				'comment_approved' => 1,
+			)
+		);
+
+		( new Backfeed() )->run();
+
+		$this->assertCount( 1, $this->likes_on( $post_id ) );
+	}
+
+	/**
+	 * Imported likes are never pushed back to rss.chat.
+	 */
+	public function test_imported_likes_are_not_pushed_back() {
+		$this->synced_post();
+		$this->likers = array( 'carol' );
+
+		( new Backfeed() )->run();
+
+		$this->assertFalse( $this->pushed );
+	}
+
+	/**
+	 * A liker without a home link (feedLink) gets their rss.chat feed as the
+	 * author URL, which is their identity on the network.
+	 */
+	public function test_like_author_url_falls_back_to_feed_url() {
+		$post_id      = $this->synced_post();
+		$this->likers = array( 'dave' );
+
+		( new Backfeed() )->run();
+
+		$likes = $this->likes_on( $post_id );
+		$this->assertCount( 1, $likes );
+		$this->assertSame( 'https://rss.chat/users/x/rss.xml', $likes[0]->comment_author_url );
 	}
 }

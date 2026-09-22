@@ -4,7 +4,9 @@
  *
  * A wp-cron job walks every post that was pushed to rss.chat, fetches its
  * replies, and stores new ones as comments. Threading is reconstructed from
- * the reply's inReplyToNum. Everything is deduped by the rss.chat guid.
+ * the reply's inReplyToNum. Replies are deduped by the rss.chat guid. Likes
+ * on the post come back too, as comments of type "like", keyed by item id
+ * plus screenname since they carry no guid.
  *
  * @package RSS_Chat
  */
@@ -141,8 +143,10 @@ class Backfeed {
 				continue;
 			}
 
-			// The array leads with the post itself; skip it.
+			// The array leads with the post itself. Its likes are the one
+			// thing we take from it; replies' likes stay on the network.
 			if ( isset( $item['id'] ) && (int) $item['id'] === $rss_id ) {
+				$this->import_likes( $post_id, $rss_id, $item );
 				continue;
 			}
 
@@ -157,6 +161,129 @@ class Backfeed {
 
 			$this->insert_comment( $post_id, $item );
 		}
+	}
+
+	/**
+	 * Bring the post's likes in line with rss.chat: new likes become comments
+	 * of type "like", likes taken back (togglelike) are deleted again.
+	 *
+	 * Likes have no guid, so each one is keyed by item id plus screenname.
+	 * The list is only fetched when the item reports likes at all; at zero
+	 * everything stored for the item goes.
+	 *
+	 * @param int   $post_id Local post id.
+	 * @param int   $rss_id  rss.chat id of the post.
+	 * @param array $item    The post's rss.chat item.
+	 * @return void
+	 */
+	private function import_likes( $post_id, $rss_id, array $item ) {
+		$likers = array();
+
+		if ( ! empty( $item['ctLikes'] ) ) {
+			$likers = ( new API() )->get_likers_list( $rss_id );
+			// On a failed read leave the stored likes as they are, rather than
+			// mistaking the error for "nobody likes this any more".
+			if ( \is_wp_error( $likers ) || ! \is_array( $likers ) ) {
+				return;
+			}
+		}
+
+		$wanted = array();
+		foreach ( $likers as $screenname ) {
+			if ( \is_string( $screenname ) && '' !== $screenname ) {
+				$wanted[ $rss_id . ':' . $screenname ] = $screenname;
+			}
+		}
+
+		$stored = $this->stored_likes( $post_id, $rss_id );
+
+		foreach ( \array_diff_key( $stored, $wanted ) as $comment_id ) {
+			\wp_delete_comment( $comment_id, true );
+		}
+
+		foreach ( \array_diff_key( $wanted, $stored ) as $key => $screenname ) {
+			$this->insert_like( $post_id, $screenname, $key );
+		}
+	}
+
+	/**
+	 * The like comments this plugin imported for one item, keyed by their
+	 * META_LIKE value. Likes that came in another way (an ActivityPub like,
+	 * say) carry no such meta and are left alone.
+	 *
+	 * @param int $post_id Local post id.
+	 * @param int $rss_id  rss.chat id of the post.
+	 * @return int[] Comment ids keyed by "<rss id>:<screenname>".
+	 */
+	private function stored_likes( $post_id, $rss_id ) {
+		$comments = \get_comments(
+			array(
+				'post_id'    => $post_id,
+				'type'       => 'like',
+				'status'     => 'all',
+				'meta_query' => array( // phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_query
+					array(
+						'key'     => Plugin::META_LIKE,
+						'value'   => $rss_id . ':',
+						'compare' => 'LIKE',
+					),
+				),
+			)
+		);
+
+		$stored = array();
+		foreach ( $comments as $comment ) {
+			$key = (string) \get_comment_meta( $comment->comment_ID, Plugin::META_LIKE, true );
+			if ( 0 === \strpos( $key, $rss_id . ':' ) ) {
+				$stored[ $key ] = (int) $comment->comment_ID;
+			}
+		}
+		return $stored;
+	}
+
+	/**
+	 * Insert one like as a comment of type "like" (the ActivityPub plugin's
+	 * convention, so themes that already render those pick these up too).
+	 *
+	 * @param int    $post_id    Local post id.
+	 * @param string $screenname Screenname of the liker.
+	 * @param string $key        Dedup key stored in META_LIKE.
+	 * @return void
+	 */
+	private function insert_like( $post_id, $screenname, $key ) {
+		// The liker's home link when they set one, else their rss.chat feed:
+		// that is their identity on the network, and it is always there.
+		$user = ( new API() )->get_user_data( $screenname );
+		$url  = '';
+		if ( \is_array( $user ) ) {
+			foreach ( array( 'feedLink', 'feedUrl' ) as $field ) {
+				if ( ! empty( $user[ $field ] ) && \is_string( $user[ $field ] ) ) {
+					$url = $user[ $field ];
+					break;
+				}
+			}
+		}
+
+		$commentdata = array(
+			'comment_post_ID'    => $post_id,
+			'comment_content'    => '',
+			'comment_author'     => $screenname,
+			'comment_author_url' => $url,
+			'comment_parent'     => 0,
+			'comment_approved'   => 1,
+			'comment_type'       => 'like',
+		);
+
+		self::$importing = true;
+		$comment_id      = \wp_insert_comment( $commentdata );
+		self::$importing = false;
+
+		if ( ! $comment_id ) {
+			return;
+		}
+
+		\update_comment_meta( $comment_id, Plugin::META_PROTOCOL, Plugin::PROTOCOL );
+		\update_comment_meta( $comment_id, Plugin::META_LIKE, $key );
 	}
 
 	/**

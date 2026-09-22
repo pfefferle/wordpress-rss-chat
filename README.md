@@ -19,7 +19,7 @@ Publish WordPress posts to the rss.chat network using the native chat post forma
 It follows the POSSE + backfeed pattern:
 
 * Write a post and give it the built-in **chat** post format. When you publish it, the post is pushed to rss.chat.
-* Replies to it are pulled back on a schedule and stored as **comments** on that post, keeping the thread structure.
+* Replies to it are pulled back on a schedule and stored as **comments** on that post, keeping the thread structure. Likes on the post come back the same way, as comments of type `like`.
 * A comment you write on one of your synced posts is pushed back to rss.chat as a reply.
 
 Your site is one identity on the network, the site owner. You sign in once with a passwordless link sent to your WordPress admin email; no password is stored. Posts in any other format, and pages, are left alone, so the chat format is your explicit opt-in per post.
@@ -27,7 +27,7 @@ Your site is one identity on the network, the site owner. You sign in once with 
 ### How it works
 
 1. Publishing a chat-format post sends it to rss.chat and remembers its id, so replies can find their way home.
-2. Every few minutes a background task checks your pushed posts for new replies and stores them as comments. Imported comments are marked with a `protocol` meta of `rss.chat`, the same convention the ActivityPub plugin uses, and are never sent back out.
+2. Every few minutes a background task checks your pushed posts for new replies and stores them as comments. Likes on the post are stored as comments of type `like` (the ActivityPub plugin's convention, so a theme that shows those shows these too), one per liker; a like taken back on rss.chat is removed again. Imported comments are marked with a `protocol` meta of `rss.chat`, the same convention the ActivityPub plugin uses, and are never sent back out.
 3. Replies you write from WordPress travel the other way: a comment on a synced post becomes a reply on rss.chat.
 
 The plugin also decorates your RSS 2.0 feed with the rss.chat `source:` vocabulary for chat-format posts, so your feed is self-describing on the network.
