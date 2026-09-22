@@ -88,7 +88,8 @@ class Test_Backfeed extends TestCase {
 		}
 
 		if ( false !== \strpos( $url, '/getitemandreplies' ) ) {
-			return $this->mock_http_response( (string) \wp_json_encode( $this->feed() ) );
+			\parse_str( (string) \wp_parse_url( $url, PHP_URL_QUERY ), $query );
+			return $this->mock_http_response( (string) \wp_json_encode( $this->feed( (int) $query['idparent'] ) ) );
 		}
 
 		if ( false !== \strpos( $url, '/getlikerslist' ) ) {
@@ -116,13 +117,14 @@ class Test_Backfeed extends TestCase {
 	 * The synthetic reply feed: the post, one reply, our own reply (which now
 	 * comes home too, deduped only by guid), and a nested reply to the first.
 	 *
+	 * @param int $rss_id rss.chat id of the post asked for.
 	 * @return array
 	 */
-	private function feed() {
+	private function feed( $rss_id ) {
 		return array(
 			array(
-				'id'          => $this->rss_id,
-				'guid'        => 'https://rss.chat/?id=200',
+				'id'          => $rss_id,
+				'guid'        => 'https://rss.chat/?id=' . $rss_id,
 				'screenname'  => 'me',
 				'description' => 'the post',
 				'ctLikes'     => \count( $this->likers ),
@@ -505,5 +507,29 @@ class Test_Backfeed extends TestCase {
 		( new Backfeed() )->run();
 
 		$this->assertCount( 2, $this->likes_on( $post_id ) );
+	}
+
+	/**
+	 * The cap is a budget for the whole run, not per post: with many synced
+	 * posts a run still stores at most LIKES_PER_RUN new likes in total.
+	 */
+	public function test_like_cap_is_shared_across_posts() {
+		$first  = $this->synced_post();
+		$second = self::factory()->post->create( array( 'post_status' => 'publish' ) );
+		\update_post_meta( $second, Plugin::META_ID, 300 );
+
+		for ( $i = 1; $i <= Backfeed::LIKES_PER_RUN; $i++ ) {
+			$this->likers[] = 'user' . $i;
+		}
+
+		( new Backfeed() )->run();
+
+		$total = \count( $this->likes_on( $first ) ) + \count( $this->likes_on( $second ) );
+		$this->assertSame( Backfeed::LIKES_PER_RUN, $total, 'one run, one budget' );
+
+		( new Backfeed() )->run();
+
+		$total = \count( $this->likes_on( $first ) ) + \count( $this->likes_on( $second ) );
+		$this->assertSame( 2 * Backfeed::LIKES_PER_RUN, $total, 'the rest follows next run' );
 	}
 }

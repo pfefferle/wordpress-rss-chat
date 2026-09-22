@@ -26,12 +26,19 @@ class Backfeed {
 	const INTERVAL = 'rss_chat_interval';
 
 	/**
-	 * How many new likes one run stores per post. Each new liker costs one
-	 * /getuserdata request, so this keeps a cron run bounded when a post
-	 * with many likes is synced for the first time; the rest follow on the
-	 * next run.
+	 * How many new likes one run stores, across all posts. Each new liker
+	 * costs one /getuserdata request, so this keeps a cron run bounded when
+	 * posts with many likes are synced for the first time; the rest follow
+	 * on the next run.
 	 */
 	const LIKES_PER_RUN = 20;
+
+	/**
+	 * New likes this run may still store.
+	 *
+	 * @var int
+	 */
+	private $like_budget = self::LIKES_PER_RUN;
 
 	/**
 	 * True while this class is inserting comments, so Syndication does not
@@ -110,6 +117,8 @@ class Backfeed {
 		if ( ! Plugin::is_connected() ) {
 			return;
 		}
+
+		$this->like_budget = self::LIKES_PER_RUN;
 
 		// Every registered type, not just the ones currently enabled for
 		// publishing: an item that is already on rss.chat keeps getting its
@@ -209,8 +218,9 @@ class Backfeed {
 			\wp_delete_comment( $comment_id, true );
 		}
 
-		$missing = \array_slice( \array_diff_key( $wanted, $stored ), 0, self::LIKES_PER_RUN, true );
+		$missing = \array_slice( \array_diff_key( $wanted, $stored ), 0, \max( 0, $this->like_budget ), true );
 		foreach ( $missing as $key => $screenname ) {
+			--$this->like_budget;
 			$this->insert_like( $post_id, $screenname, $key );
 		}
 	}
