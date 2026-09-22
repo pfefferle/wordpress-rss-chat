@@ -29,13 +29,13 @@ class API {
 	}
 
 	/**
-	 * Fetch the screennames of everyone who liked a post, in the order they
-	 * liked it.
+	 * Fetch the likes of a post: the screennames of everyone who liked it, in
+	 * the order they did.
 	 *
 	 * @param int $id Post id.
 	 * @return string[]|\WP_Error
 	 */
-	public function get_likers_list( $id ) {
+	public function get_likes( $id ) {
 		return $this->get( '/getlikerslist', array( 'id' => (int) $id ) );
 	}
 

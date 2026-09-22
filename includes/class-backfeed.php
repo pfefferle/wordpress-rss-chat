@@ -180,7 +180,7 @@ class Backfeed {
 		$likers = array();
 
 		if ( ! empty( $item['ctLikes'] ) ) {
-			$likers = ( new API() )->get_likers_list( $rss_id );
+			$likers = ( new API() )->get_likes( $rss_id );
 			// On a failed read leave the stored likes as they are, rather than
 			// mistaking the error for "nobody likes this any more".
 			if ( \is_wp_error( $likers ) || ! \is_array( $likers ) ) {
