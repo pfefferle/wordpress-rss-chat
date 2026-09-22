@@ -160,4 +160,38 @@ class Test_Feed extends TestCase {
 
 		$this->assertStringContainsString( '<source:comments count="1"', $feed );
 	}
+
+	/**
+	 * A post with no comments at all needs no counting query: the feed is a
+	 * public endpoint, polled often, with one item per synced post.
+	 */
+	public function test_reply_count_does_not_query_a_post_without_comments() {
+		$this->create_chat_post();
+
+		$before = \get_num_queries();
+		$feed   = $this->render_feed();
+		$after  = \get_num_queries();
+
+		$this->assertStringContainsString( '<source:comments count="0"', $feed );
+
+		$post_id = self::factory()->post->create( array( 'post_status' => 'publish' ) );
+		\set_post_format( $post_id, 'chat' );
+
+		$this->assertSame(
+			$after - $before,
+			$this->queries_rendering_feed(),
+			'the second chat post costs no counting query either'
+		);
+	}
+
+	/**
+	 * Queries spent rendering the feed once.
+	 *
+	 * @return int
+	 */
+	private function queries_rendering_feed() {
+		$before = \get_num_queries();
+		$this->render_feed();
+		return \get_num_queries() - $before;
+	}
 }

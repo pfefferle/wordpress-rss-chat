@@ -109,6 +109,15 @@ class Feed {
 	 * @return int
 	 */
 	private function reply_count( $post ) {
+		/*
+		 * The stored count counts likes too, so it cannot answer the question
+		 * on its own. At zero it can: nothing of any type is there, so there
+		 * is nothing to count and no query to run.
+		 */
+		if ( 0 === (int) $post->comment_count ) {
+			return 0;
+		}
+
 		return (int) \get_comments(
 			array(
 				'post_id' => $post->ID,
