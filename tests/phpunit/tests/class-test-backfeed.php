@@ -815,4 +815,19 @@ class Test_Backfeed extends TestCase {
 		 */
 		$this->assertCount( (int) \ceil( ( Backfeed::LIKE_REQUESTS_PER_RUN - 1 ) / 2 ), $this->likes_on( $post_id ) );
 	}
+
+	/**
+	 * A like carries a short text, the same one the ActivityPub and
+	 * ATmosphere plugins store, so it is not an empty comment.
+	 */
+	public function test_a_like_carries_a_text() {
+		$post_id      = $this->synced_post();
+		$this->likers = array( 'carol' );
+
+		( new Backfeed() )->run();
+
+		$likes = $this->likes_on( $post_id );
+		$this->assertCount( 1, $likes );
+		$this->assertSame( '… liked this!', $likes[0]->comment_content );
+	}
 }
